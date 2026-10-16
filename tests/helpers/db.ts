@@ -3,11 +3,14 @@ import { sql } from 'drizzle-orm'
 import { db } from '@/db/client'
 import { businesses, memberships, outlets, users } from '@/db/schema'
 import { normalizeKePhone } from '@/domain/phone'
+import { assertTestDatabase } from './test-db-guard'
 
 export const SEED_PASSWORD = 'password123'
 
-/** Truncates every table in the public schema (not Drizzle's own migrations table). */
+/** Truncates every table in the public schema (not Drizzle's own migrations table). Test databases only. */
 export async function resetDb(): Promise<void> {
+  // Refuse to wipe anything that is not a *_test database.
+  assertTestDatabase(process.env.DATABASE_URL)
   const { rows } = await db.execute<{ tablename: string }>(
     sql`select tablename from pg_tables where schemaname = 'public'`,
   )

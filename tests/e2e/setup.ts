@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Pool } from 'pg'
+import { assertTestDatabase } from '../helpers/test-db-guard'
 
 export const OWNER_EMAIL = 'owner@smoke.test'
 export const OWNER_PASSWORD = 'password123'
@@ -14,6 +15,7 @@ export default async function globalSetup() {
   if (existsSync('.env')) process.loadEnvFile('.env')
   const url =
     process.env.TEST_DATABASE_URL ?? 'postgres://pos:pos@localhost:5433/pos_test'
+  assertTestDatabase(url)
   // The db client reads DATABASE_URL when it is first imported, so point it at the test DB first
   // (never the dev DB from .env) and only then import anything that touches the client.
   process.env.DATABASE_URL = url
