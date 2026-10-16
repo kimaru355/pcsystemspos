@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
 import { businesses, outlets } from '@/db/schema'
 import { CONNECTION_MODES, type ConnectionMode } from '@/domain/connection-modes'
+import { isUuid } from '@/domain/ids'
 import { isUniqueViolation } from '@/server/db-errors'
 import { DomainError } from '@/server/errors'
 import { assertCan, type TenantCtx } from '@/server/tenant'
@@ -119,6 +120,7 @@ export async function updateOutlet(
   patch: Partial<{ name: string; connectionMode: ConnectionMode | null; active: boolean }>,
 ): Promise<Outlet> {
   assertCan(ctx, 'outlet.manage')
+  if (!isUuid(outletId)) throw new DomainError('not_found')
   const set: Partial<Pick<OutletRow, 'name' | 'connectionMode' | 'active'>> = {}
   if (patch.name !== undefined) set.name = parseName(patch.name)
   if (patch.connectionMode !== undefined) set.connectionMode = parseOptionalMode(patch.connectionMode)

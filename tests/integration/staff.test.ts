@@ -9,6 +9,7 @@ import {
   createStaff,
   deactivateStaff,
   listStaff,
+  reactivateStaff,
   setPin,
   updateStaff,
   type StaffMember,
@@ -353,6 +354,11 @@ describe('updateStaff', () => {
 describe('deactivateStaff', () => {
   beforeEach(resetDb)
 
+  it('reports a malformed id as not_found', async () => {
+    const { ctx } = await setup()
+    await expect(deactivateStaff(db, ctx, 'x')).rejects.toMatchObject({ code: 'not_found' })
+  })
+
   it('deactivates a cashier and revokes their sessions and tenant access', async () => {
     const { ctx, ktl, businessId } = await setup()
     const { member } = await hire(ctx, 'cashier', [ktl])
@@ -504,5 +510,99 @@ describe('setPin', () => {
     const serialized = JSON.stringify(rows[0])
     expect(serialized).not.toContain('482913')
     expect(serialized).not.toContain(m.pinHash!)
+  })
+})
+
+describe('reactivateStaff', () => {
+  beforeEach(resetDb)
+
+  it('restores access and keeps the existing password, and audits', async () => {
+    const { ctx, ktl, businessId } = await setup()
+    const { member } = await hire(ctx, 'cashier', [ktl])
+    await db.update(users).set({ mustChangePassword: false }).where(eq(users.id, member.userId))
+    await deactivateStaff(db, ctx, member.membershipId)
+    expect(await getTenantCtx(db, member.userId)).toBeNull()
+
+    await reactivateStaff(db, ctx, member.membershipId)
+
+    expect(await getTenantCtx(db, member.userId)).not.toBeNull()
+    const result = await login(db, { identifier: `cashier${counter}@staff.test`, password: TEMP_PASSWORD })
+    expect(result).toMatchObject({ ok: true, mustChangePassword: false })
+    const rows = await db.select().from(auditLog).where(eq(auditLog.action, 'staff.reactivate'))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      businessId,
+      actorUserId: ctx.userId,
+      entityType: 'membership',
+      entityId: member.membershipId,
+    })
+  })
+
+  it('forbids a manager', async () => {
+    const { ctx, ktl } = await setup()
+    const mgr = await hire(ctx, 'manager', [ktl])
+    const cashier = await hire(ctx, 'cashier', [ktl])
+    await deactivateStaff(db, ctx, cashier.member.membershipId)
+    await expect(reactivateStaff(db, mgr.ctx, cashier.member.membershipId)).rejects.toMatchObject({
+      code: 'forbidden',
+    })
+    expect(await getTenantCtx(db, cashier.member.userId)).toBeNull()
+  })
+
+  it('reports another business membership as not_found and leaves it inactive', async () => {
+    const a = await setup()
+    const b = await setup(['OTH'])
+    const target = await hire(b.ctx, 'cashier', [b.ktl])
+    await deactivateStaff(db, b.ctx, target.member.membershipId)
+    await expect(reactivateStaff(db, a.ctx, target.member.membershipId)).rejects.toMatchObject({
+      code: 'not_found',
+    })
+    expect(await getTenantCtx(db, target.member.userId)).toBeNull()
+    expect(await db.select().from(auditLog).where(eq(auditLog.action, 'staff.reactivate'))).toHaveLength(0)
+  })
+
+  it('reports a malformed id as not_found', async () => {
+    const { ctx } = await setup()
+    await expect(reactivateStaff(db, ctx, 'x')).rejects.toMatchObject({ code: 'not_found' })
+  })
+
+  it('refuses an already-active member', async () => {
+    const { ctx, ktl } = await setup()
+    const { member } = await hire(ctx, 'cashier', [ktl])
+    await expect(reactivateStaff(db, ctx, member.membershipId)).rejects.toMatchObject({ code: 'conflict' })
+    expect(await db.select().from(auditLog).where(eq(auditLog.action, 'staff.reactivate'))).toHaveLength(0)
+  })
+})
+
+describe('malformed ids', () => {
+  beforeEach(resetDb)
+
+  it('createStaff reports a malformed outlet id as not_found', async () => {
+    const { ctx } = await setup()
+    await expect(
+      createStaff(db, ctx, {
+        name: 'X',
+        email: 'x@staff.test',
+        role: 'cashier',
+        outletIds: ['bad'],
+        tempPassword: TEMP_PASSWORD,
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' })
+  })
+
+  it('updateStaff reports a malformed membership or outlet id as not_found', async () => {
+    const { ctx, ktl } = await setup()
+    await expect(updateStaff(db, ctx, 'nope', { role: 'manager', outletIds: [ktl] })).rejects.toMatchObject({
+      code: 'not_found',
+    })
+    const { member } = await hire(ctx, 'cashier', [ktl])
+    await expect(updateStaff(db, ctx, member.membershipId, { outletIds: ['bad'] })).rejects.toMatchObject({
+      code: 'not_found',
+    })
+  })
+
+  it('setPin reports a malformed id as not_found', async () => {
+    const { ctx } = await setup()
+    await expect(setPin(db, ctx, 'nope', '1234')).rejects.toMatchObject({ code: 'not_found' })
   })
 })

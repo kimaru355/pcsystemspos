@@ -7,6 +7,7 @@ import { DomainError } from '@/server/errors'
 import {
   createStaff,
   deactivateStaff,
+  reactivateStaff,
   setPin,
   updateStaff,
 } from '@/server/services/staff'
@@ -98,4 +99,18 @@ export async function deactivateStaffAction(
   }
   revalidatePath('/admin/staff')
   return { message: 'Deactivated.', ok: true }
+}
+
+export async function reactivateStaffAction(
+  _prev: StaffFormState,
+  formData: FormData,
+): Promise<StaffFormState> {
+  const ctx = await requireTenant()
+  try {
+    await reactivateStaff(db, ctx, text(formData, 'membershipId'))
+  } catch (e) {
+    return fail(e)
+  }
+  revalidatePath('/admin/staff')
+  return { message: 'Reactivated.', ok: true }
 }

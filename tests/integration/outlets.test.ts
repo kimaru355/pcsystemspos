@@ -154,6 +154,13 @@ describe('setDefaultConnectionMode', () => {
 describe('updateOutlet', () => {
   beforeEach(resetDb)
 
+  it('reports a malformed id as not_found', async () => {
+    const { ctx } = await ownerCtx()
+    await expect(updateOutlet(db, ctx, 'not-a-uuid', { name: 'X' })).rejects.toMatchObject({
+      code: 'not_found',
+    })
+  })
+
   it('updates name, mode and active but never the code, with one audit row', async () => {
     const { ctx, businessId } = await ownerCtx()
     const created = await createOutlet(db, ctx, { name: 'Old', code: 'OLD', connectionMode: null })

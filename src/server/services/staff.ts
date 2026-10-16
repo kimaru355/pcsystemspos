@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
 import { membershipOutlets, memberships, outlets, users } from '@/db/schema'
+import { isUuid } from '@/domain/ids'
 import { normalizeKePhone } from '@/domain/phone'
 import { can, ROLES, type Role } from '@/domain/permissions'
 import { hashSecret } from '@/server/auth/secret'
@@ -79,6 +80,7 @@ function requireOutletsFor(role: Role, outletIds: string[]): void {
 /** Every id must be an active outlet of the business; anything else (incl. a foreign id) is not_found. */
 async function assertActiveOutlets(tx: Tx, businessId: string, outletIds: string[]): Promise<void> {
   if (outletIds.length === 0) return
+  if (!outletIds.every(isUuid)) throw new DomainError('not_found', 'Outlet not found.')
   const found = await tx
     .select({ id: outlets.id })
     .from(outlets)
@@ -249,6 +251,7 @@ async function lockActiveOwners(tx: Tx, businessId: string): Promise<string[]> {
 }
 
 async function getTarget(tx: Tx, businessId: string, membershipId: string) {
+  if (!isUuid(membershipId)) throw new DomainError('not_found')
   const [target] = await tx
     .select()
     .from(memberships)
@@ -331,6 +334,22 @@ export async function deactivateStaff(db: Db, ctx: TenantCtx, membershipId: stri
       businessId: ctx.businessId,
       actorUserId: ctx.userId,
       action: 'staff.deactivate',
+      entityType: 'membership',
+      entityId: target.id,
+    })
+  })
+}
+
+export async function reactivateStaff(db: Db, ctx: TenantCtx, membershipId: string): Promise<void> {
+  assertCan(ctx, 'staff.manage')
+  await db.transaction(async (tx) => {
+    const target = await getTarget(tx, ctx.businessId, membershipId)
+    if (target.active) throw new DomainError('conflict', 'That person is already active.')
+    await tx.update(memberships).set({ active: true }).where(eq(memberships.id, target.id))
+    await recordAudit(tx, {
+      businessId: ctx.businessId,
+      actorUserId: ctx.userId,
+      action: 'staff.reactivate',
       entityType: 'membership',
       entityId: target.id,
     })

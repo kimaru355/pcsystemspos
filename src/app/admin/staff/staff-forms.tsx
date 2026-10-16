@@ -7,6 +7,7 @@ import type { StaffMember } from '@/server/services/staff'
 import {
   createStaffAction,
   deactivateStaffAction,
+  reactivateStaffAction,
   setPinAction,
   updateStaffAction,
   type StaffFormState,
@@ -190,7 +191,9 @@ function DeactivateForm({ member }: { member: StaffMember }) {
         </Button>
       ) : (
         <>
-          <span className="text-sm">Deactivate {member.name}? They will be signed out immediately.</span>
+          <span className="text-sm">
+            Deactivate {member.name}? They lose access immediately and can be reactivated later.
+          </span>
           <Button type="submit" variant="destructive" size="sm" disabled={pending}>
             {pending ? 'Deactivating…' : 'Confirm deactivate'}
           </Button>
@@ -199,6 +202,19 @@ function DeactivateForm({ member }: { member: StaffMember }) {
           </Button>
         </>
       )}
+      <Message state={state} />
+    </form>
+  )
+}
+
+function ReactivateForm({ member }: { member: StaffMember }) {
+  const [state, action, pending] = useActionState(reactivateStaffAction, initialState)
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-3 border-t pt-3">
+      <input type="hidden" name="membershipId" value={member.membershipId} />
+      <Button type="submit" variant="outline" size="sm" disabled={pending}>
+        {pending ? 'Reactivating…' : 'Reactivate'}
+      </Button>
       <Message state={state} />
     </form>
   )
@@ -237,6 +253,7 @@ export function StaffRow({
       {canManage && member.active && <EditForm member={member} outletOptions={outletOptions} />}
       {canSetPin && <PinForm member={member} />}
       {canManage && member.active && !isSelf && <DeactivateForm member={member} />}
+      {canManage && !member.active && <ReactivateForm member={member} />}
     </div>
   )
 }
