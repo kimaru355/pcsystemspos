@@ -101,6 +101,14 @@ describe('checkCollection', () => {
     })
   })
 
+  it('does not let per-piece rounding block a fully paid split collection', () => {
+    const line: OrderLine = { ...cement, qtyMilli: 1000, unitPriceCents: 1001, vatRateBp: 0, collectedMilli: 500 }
+    expect(check({ lines: [line], paidCents: 1001, request: [{ lineId: 'L1', qtyMilli: 500 }] })).toEqual({
+      ok: true,
+      valueCents: 500,
+    })
+  })
+
   it('rejects collecting more than is on hand', () => {
     expect(check({ onHandMilli: { cement: 1000 }, request: [{ lineId: 'L1', qtyMilli: 2000 }] })).toEqual({
       ok: false,

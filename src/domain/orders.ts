@@ -87,10 +87,16 @@ export function checkCollection(input: {
     }
   }
 
-  const requestValue = request.reduce(
-    (sum, r) => sum + lineGross(r.qtyMilli, byId.get(r.lineId)!.unitPriceCents),
-    0,
-  )
+  // Value each requested line cumulatively so rounding is additive across visits:
+  // a fully paid order can always be collected in full, however it is split.
+  const requestValue = request.reduce((sum, r) => {
+    const l = byId.get(r.lineId)!
+    return (
+      sum +
+      lineGross(l.collectedMilli + r.qtyMilli, l.unitPriceCents) -
+      lineGross(l.collectedMilli, l.unitPriceCents)
+    )
+  }, 0)
   const totalValue = collectedValueCents(lines) + requestValue
   const covered = paidCents + creditCents
   if (totalValue > covered) {
