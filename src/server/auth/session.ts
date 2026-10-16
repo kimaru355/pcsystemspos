@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import type { Db } from '@/db/client'
+import type { Db, Tx } from '@/db/client'
 import { sessions } from '@/db/schema'
 
 export const SESSION_COOKIE = 'pos_session'
@@ -75,6 +75,6 @@ export async function invalidateSession(db: Db, token: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.id, hashToken(token)))
 }
 
-export async function invalidateUserSessions(db: Db, userId: string): Promise<void> {
+export async function invalidateUserSessions(db: Db | Tx, userId: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.userId, userId))
 }
