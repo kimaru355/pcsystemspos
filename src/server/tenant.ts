@@ -2,7 +2,7 @@ import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { and, eq } from 'drizzle-orm'
 import { db, type Db } from '@/db/client'
-import { businesses, membershipOutlets, memberships } from '@/db/schema'
+import { businesses, membershipOutlets, memberships, outlets } from '@/db/schema'
 import { can, type Action, type Role } from '@/domain/permissions'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { DomainError } from '@/server/errors'
@@ -42,10 +42,18 @@ export async function getTenantCtx(db: Db, userId: string): Promise<TenantCtx | 
 
   let outletScope: TenantCtx['outletScope'] = 'all'
   if (row.role !== 'owner') {
+    // Join to outlets so a stray row can never leak another business's (or an inactive) outlet.
     const assigned = await db
-      .select({ outletId: membershipOutlets.outletId })
+      .select({ outletId: outlets.id })
       .from(membershipOutlets)
-      .where(eq(membershipOutlets.membershipId, row.membershipId))
+      .innerJoin(outlets, eq(outlets.id, membershipOutlets.outletId))
+      .where(
+        and(
+          eq(membershipOutlets.membershipId, row.membershipId),
+          eq(outlets.businessId, row.businessId),
+          eq(outlets.active, true),
+        ),
+      )
     outletScope = assigned.map((a) => a.outletId)
   }
   return {

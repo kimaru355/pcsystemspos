@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/client'
-import { businesses, membershipOutlets, memberships, users } from '@/db/schema'
+import { businesses, membershipOutlets, memberships, outlets, users } from '@/db/schema'
 import { DomainError } from '@/server/errors'
 import { assertCan, getTenantCtx, type TenantCtx } from '@/server/tenant'
 import { resetDb, seedBusiness } from '../helpers/db'
@@ -67,6 +67,28 @@ describe('getTenantCtx', () => {
     const { businessId } = await seedBusiness({ outletCodes: ['MAIN'] })
     const cashier = await addMember(businessId, 'cashier', [])
     expect((await getTenantCtx(db, cashier.userId))?.outletScope).toEqual([])
+  })
+
+  it("never puts another business's outlet into the scope", async () => {
+    const a = await seedBusiness({ outletCodes: ['MAIN'] })
+    const b = await seedBusiness({ outletCodes: ['OTHR'] })
+    const cashier = await addMember(a.businessId, 'cashier', [a.outletIds[0]])
+    // Bad row: the schema has no composite FK, so B's outlet can be linked under A's business.
+    await db.insert(membershipOutlets).values({
+      membershipId: cashier.membershipId,
+      outletId: b.outletIds[0],
+      businessId: a.businessId,
+    })
+    const ctx = await getTenantCtx(db, cashier.userId)
+    expect(ctx?.outletScope).toEqual([a.outletIds[0]])
+    expect(ctx?.outletScope).not.toContain(b.outletIds[0])
+  })
+
+  it('excludes inactive outlets from the scope', async () => {
+    const { businessId, outletIds } = await seedBusiness({ outletCodes: ['MAIN', 'WEST'] })
+    const cashier = await addMember(businessId, 'cashier', outletIds)
+    await db.update(outlets).set({ active: false }).where(eq(outlets.id, outletIds[1]))
+    expect((await getTenantCtx(db, cashier.userId))?.outletScope).toEqual([outletIds[0]])
   })
 
   it('returns null for an inactive membership', async () => {
