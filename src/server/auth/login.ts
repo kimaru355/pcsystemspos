@@ -32,7 +32,8 @@ export async function login(
 ): Promise<LoginResult> {
   const identity = normalizeIdentifier(input.identifier)
   // Unparseable identifiers are keyed by their trimmed text so they lock like any other.
-  const key = identity?.value ?? input.identifier.trim().toLowerCase().slice(0, 200)
+  // Namespaced so a login identifier can never collide with another lockout key (e.g. `pwchange:`).
+  const key = `login:${identity?.value ?? input.identifier.trim().toLowerCase().slice(0, 200)}`
 
   const reservation = await reserveAttempt(db, key)
   if (reservation.locked) return { ok: false, reason: 'locked' }

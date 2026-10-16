@@ -169,8 +169,8 @@ describe('login', () => {
     const rows = await db.select().from(loginAttempts)
     expect(rows.map((r) => [r.identifier, r.success]).sort()).toEqual(
       [
-        ['+254712345678', false],
-        [email, true],
+        ['login:+254712345678', false],
+        [`login:${email}`, true],
       ].sort(),
     )
   })
@@ -303,6 +303,15 @@ describe('changePassword', () => {
     const { token } = await createSession(db, owner.userId)
     await changePassword(db, owner.userId, SEED_PASSWORD, 'new-password-1')
     expect(await validateSession(db, token)).toBeNull()
+  })
+
+  it('is not lockable through a login attempt keyed like a password change', async () => {
+    const { owner } = await seedBusiness()
+    for (let i = 0; i < 5; i++) {
+      await login(db, { identifier: `pwchange:${owner.userId}`, password: 'x' })
+    }
+    const err = await changePassword(db, owner.userId, SEED_PASSWORD, 'new-password-1').catch((e) => e)
+    expect(err).toBeUndefined()
   })
 
   it('throttles wrong current passwords: 5 wrong then the correct one is forbidden', async () => {
