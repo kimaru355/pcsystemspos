@@ -59,10 +59,10 @@ export function CreateStaffForm({ outletOptions }: { outletOptions: OutletOption
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="new-name" className="text-sm font-medium">
+        <label htmlFor="new-staff-name" className="text-sm font-medium">
           Name
         </label>
-        <input id="new-name" name="name" required className={inputClass} />
+        <input id="new-staff-name" name="name" required className={inputClass} />
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="new-role" className="text-sm font-medium">
