@@ -1,31 +1,23 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { getCurrentUser } from '@/server/auth/current-user'
-import { logout } from './logout/actions'
+import { requireTenant } from '@/server/tenant'
 
 export default function Home() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
-      <h1 className="text-2xl font-semibold">PC Systems POS</h1>
+    <main className="flex flex-1 flex-col items-center justify-center p-6">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-        <Account />
+        <RoleRedirect />
       </Suspense>
     </main>
   )
 }
 
-async function Account() {
+/** `/` only routes: platform admin -> /platform, owner/manager -> /admin, cashier -> /till. */
+async function RoleRedirect() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
-  return (
-    <>
-      <p className="text-sm">Signed in as {user.name}</p>
-      <form action={logout}>
-        <Button type="submit" variant="outline">
-          Log out
-        </Button>
-      </form>
-    </>
-  )
+  if (user.isPlatformAdmin) redirect('/platform')
+  const ctx = await requireTenant()
+  return redirect(ctx.role === 'cashier' ? '/till' : '/admin')
 }
