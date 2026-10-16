@@ -1,13 +1,13 @@
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
 import { businesses, outlets } from '@/db/schema'
+import { CONNECTION_MODES, type ConnectionMode } from '@/domain/connection-modes'
 import { isUniqueViolation } from '@/server/db-errors'
 import { DomainError } from '@/server/errors'
 import { assertCan, type TenantCtx } from '@/server/tenant'
 import { recordAudit } from './audit'
 
-export const CONNECTION_MODES = ['full_offline', 'default', 'always_online'] as const
-export type ConnectionMode = (typeof CONNECTION_MODES)[number]
+export { CONNECTION_MODES, type ConnectionMode }
 
 export type Outlet = {
   id: string

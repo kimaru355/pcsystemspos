@@ -2,10 +2,11 @@ import { Suspense } from 'react'
 import { eq } from 'drizzle-orm'
 import { db } from '@/db/client'
 import { businesses } from '@/db/schema'
+import { MODE_LABELS } from '@/domain/connection-modes'
 import { can } from '@/domain/permissions'
 import { listOutlets } from '@/server/services/outlets'
 import { requireTenant } from '@/server/tenant'
-import { CreateOutletForm, DefaultModeForm, MODE_LABELS, OutletRow } from './outlet-forms'
+import { CreateOutletForm, DefaultModeForm, OutletRow } from './outlet-forms'
 
 export default function OutletsPage() {
   return (

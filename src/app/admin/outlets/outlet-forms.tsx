@@ -2,7 +2,8 @@
 
 import { useActionState } from 'react'
 import { Button } from '@/components/ui/button'
-import type { ConnectionMode, Outlet } from '@/server/services/outlets'
+import { MODE_LABELS, type ConnectionMode } from '@/domain/connection-modes'
+import type { Outlet } from '@/server/services/outlets'
 import {
   createOutletAction,
   setDefaultModeAction,
@@ -13,12 +14,6 @@ import {
 const initialState: OutletFormState = { message: '' }
 const inputClass =
   'h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-
-export const MODE_LABELS: Record<ConnectionMode, string> = {
-  full_offline: 'Full offline',
-  default: 'Default',
-  always_online: 'Always online',
-}
 
 function Message({ state }: { state: OutletFormState }) {
   return (
