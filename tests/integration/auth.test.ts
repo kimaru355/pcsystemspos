@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/client'
-import { loginAttempts, sessions, users } from '@/db/schema'
+import { loginAttempts, memberships, sessions, users } from '@/db/schema'
 import { changePassword, login } from '@/server/auth/login'
 import {
   createSession,
@@ -200,6 +200,49 @@ describe('login', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('cannot be bypassed by concurrent wrong-password requests', async () => {
+    const { owner } = await seedBusiness()
+    const email = await ownerEmail(owner.userId)
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => login(db, { identifier: email, password: 'wrong-password' })),
+    )
+    const invalid = results.filter((r) => !r.ok && r.reason === 'invalid')
+    const locked = results.filter((r) => !r.ok && r.reason === 'locked')
+    expect(invalid.length).toBeLessThanOrEqual(5)
+    expect(invalid.length + locked.length).toBe(10)
+    expect(await login(db, { identifier: email, password: SEED_PASSWORD })).toEqual({
+      ok: false,
+      reason: 'locked',
+    })
+  })
+
+  it('does not record attempts or extend the window while locked', async () => {
+    const { owner } = await seedBusiness()
+    const email = await ownerEmail(owner.userId)
+    for (let i = 0; i < 5; i++) await login(db, { identifier: email, password: 'wrong-password' })
+    for (let i = 0; i < 3; i++) await login(db, { identifier: email, password: 'wrong-password' })
+    expect(await db.select().from(loginAttempts)).toHaveLength(5)
+  })
+
+  it('refuses a user whose membership is deactivated, like a wrong password', async () => {
+    const { owner } = await seedBusiness()
+    const email = await ownerEmail(owner.userId)
+    await db.update(memberships).set({ active: false }).where(eq(memberships.userId, owner.userId))
+    expect(await login(db, { identifier: email, password: SEED_PASSWORD })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    })
+  })
+
+  it('lets a platform admin without a membership log in', async () => {
+    const { owner } = await seedBusiness()
+    const email = await ownerEmail(owner.userId)
+    await db.delete(memberships).where(eq(memberships.userId, owner.userId))
+    expect((await login(db, { identifier: email, password: SEED_PASSWORD })).ok).toBe(false)
+    await db.update(users).set({ isPlatformAdmin: true }).where(eq(users.id, owner.userId))
+    expect((await login(db, { identifier: email, password: SEED_PASSWORD })).ok).toBe(true)
+  })
+
   it('locks an unknown identifier the same way as a known one', async () => {
     for (let i = 0; i < 5; i++) {
       await login(db, { identifier: 'ghost@nowhere.test', password: 'x' })
@@ -253,5 +296,29 @@ describe('changePassword', () => {
     // fresh identifier state: the failed attempt above counts once, well under the limit
     const result = await login(db, { identifier: email, password: 'new-password-1' })
     expect(result).toMatchObject({ ok: true, mustChangePassword: false })
+  })
+
+  it('revokes previously issued sessions', async () => {
+    const { owner } = await seedBusiness()
+    const { token } = await createSession(db, owner.userId)
+    await changePassword(db, owner.userId, SEED_PASSWORD, 'new-password-1')
+    expect(await validateSession(db, token)).toBeNull()
+  })
+
+  it('throttles wrong current passwords: 5 wrong then the correct one is forbidden', async () => {
+    const { owner } = await seedBusiness()
+    for (let i = 0; i < 5; i++) {
+      const err = await changePassword(db, owner.userId, 'wrong-current', 'new-password-1').catch(
+        (e) => e,
+      )
+      expect(err.code).toBe('forbidden')
+    }
+    const err = await changePassword(db, owner.userId, SEED_PASSWORD, 'new-password-1').catch(
+      (e) => e,
+    )
+    expect(err).toBeInstanceOf(DomainError)
+    expect(err.code).toBe('forbidden')
+    const email = await ownerEmail(owner.userId)
+    expect((await login(db, { identifier: email, password: SEED_PASSWORD })).ok).toBe(true)
   })
 })

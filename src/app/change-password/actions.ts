@@ -1,9 +1,11 @@
 'use server'
 
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { db } from '@/db/client'
 import { changePassword } from '@/server/auth/login'
 import { getCurrentUser } from '@/server/auth/current-user'
+import { SESSION_COOKIE, createSession } from '@/server/auth/session'
 import { DomainError } from '@/server/errors'
 
 export interface ChangePasswordState {
@@ -26,10 +28,20 @@ export async function changePasswordAction(
     await changePassword(db, user.id, current, next)
   } catch (e) {
     if (e instanceof DomainError) {
-      if (e.code === 'forbidden') return { message: 'Current password is incorrect.' }
+      if (e.code === 'forbidden') return { message: e.message }
       if (e.code === 'invalid_input') return { message: e.message }
     }
     throw e
   }
+
+  // changePassword revoked every session, including this one: issue a fresh one.
+  const { token, expiresAt } = await createSession(db, user.id)
+  ;(await cookies()).set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    expires: expiresAt,
+  })
   redirect('/')
 }

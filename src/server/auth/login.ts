@@ -1,13 +1,12 @@
-import { and, eq, gte, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { loginAttempts, users } from '@/db/schema'
+import { memberships, users } from '@/db/schema'
 import { normalizeKePhone } from '@/domain/phone'
 import { DomainError } from '../errors'
+import { completeAttempt, reserveAttempt } from './lockout'
 import { hashSecret, verifySecret } from './secret'
-import { createSession } from './session'
+import { createSession, invalidateUserSessions } from './session'
 
-export const MAX_FAILED_ATTEMPTS = 5
-export const LOCKOUT_WINDOW_MS = 15 * 60 * 1000
 export const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_LENGTH = 200
 
@@ -35,23 +34,12 @@ export async function login(
   // Unparseable identifiers are keyed by their trimmed text so they lock like any other.
   const key = identity?.value ?? input.identifier.trim().toLowerCase().slice(0, 200)
 
-  const since = new Date(Date.now() - LOCKOUT_WINDOW_MS)
-  const [{ failures }] = await db
-    .select({ failures: sql<number>`count(*)::int` })
-    .from(loginAttempts)
-    .where(
-      and(
-        eq(loginAttempts.identifier, key),
-        eq(loginAttempts.success, false),
-        gte(loginAttempts.attemptedAt, since),
-      ),
-    )
-  if (failures >= MAX_FAILED_ATTEMPTS) {
-    await db.insert(loginAttempts).values({ identifier: key, success: false })
-    return { ok: false, reason: 'locked' }
-  }
+  const reservation = await reserveAttempt(db, key)
+  if (reservation.locked) return { ok: false, reason: 'locked' }
 
-  let user: { id: string; passwordHash: string; mustChangePassword: boolean } | undefined
+  let user:
+    | { id: string; passwordHash: string; mustChangePassword: boolean; allowed: boolean }
+    | undefined
   if (identity) {
     const where =
       identity.kind === 'email'
@@ -62,8 +50,11 @@ export async function login(
         id: users.id,
         passwordHash: users.passwordHash,
         mustChangePassword: users.mustChangePassword,
+        // Platform admins have no membership; everyone else needs an active one.
+        allowed: sql<boolean>`(${users.isPlatformAdmin} or ${memberships.active} is true)`,
       })
       .from(users)
+      .leftJoin(memberships, eq(memberships.userId, users.id))
       .where(where)
   }
 
@@ -76,9 +67,10 @@ export async function login(
     passwordOk = false
   }
 
-  await db.insert(loginAttempts).values({ identifier: key, success: passwordOk })
-  if (!passwordOk || !user) return { ok: false, reason: 'invalid' }
+  // A deactivated user is indistinguishable from a wrong password (same path and timing).
+  if (!passwordOk || !user || !user.allowed) return { ok: false, reason: 'invalid' }
 
+  await completeAttempt(db, reservation.attemptId)
   const { token, expiresAt } = await createSession(db, user.id)
   return { ok: true, token, expiresAt, mustChangePassword: user.mustChangePassword }
 }
@@ -99,6 +91,11 @@ export async function changePassword(
     throw new DomainError('invalid_input', 'Password is too long.')
   }
 
+  const reservation = await reserveAttempt(db, `pwchange:${userId}`)
+  if (reservation.locked) {
+    throw new DomainError('forbidden', 'Too many attempts. Try again in 15 minutes.')
+  }
+
   const [user] = await db
     .select({ passwordHash: users.passwordHash })
     .from(users)
@@ -107,9 +104,12 @@ export async function changePassword(
   if (!(await verifySecret(user.passwordHash, current))) {
     throw new DomainError('forbidden', 'Current password is incorrect.')
   }
+  await completeAttempt(db, reservation.attemptId)
 
   await db
     .update(users)
     .set({ passwordHash: await hashSecret(next), mustChangePassword: false })
     .where(eq(users.id, userId))
+  // Revoke every session (including any a thief holds); the caller issues a fresh one.
+  await invalidateUserSessions(db, userId)
 }
