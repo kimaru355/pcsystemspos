@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/client'
 import { auditLog, itemBarcodes, items, stockMovements } from '@/db/schema'
@@ -418,6 +418,7 @@ describe('packs', () => {
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.businessId, businessId), eq(auditLog.action, 'pack.update')))
+      .orderBy(asc(auditLog.seq))
       .limit(1)
     expect(audit.data).toMatchObject({ before: { name: 'A' }, after: { name: 'A2' } })
   })
