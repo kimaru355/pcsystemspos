@@ -224,7 +224,7 @@ async function StockByOutlet({ ctx, item }: { ctx: TenantCtx; item: Item }) {
             {r.negative ? 'Negative' : r.isLow ? 'Low' : ''}
           </span>
           <Link
-            href={`/admin/stock?outlet=${r.outletId}`}
+            href={`/admin/stock?${new URLSearchParams({ outlet: r.outletId, q: item.sku ?? item.name })}`}
             className="col-span-3 text-primary underline-offset-4 hover:underline sm:col-span-1 sm:text-right"
           >
             {canAct ? 'Receive or adjust' : 'View stock'}

@@ -96,6 +96,8 @@ const BELOW_ZERO = 'That would take stock below zero.'
 export type LockedStock = {
   fractional: boolean
   active: boolean
+  itemName: string
+  baseUnit: string
   onHandMilli: Milli
   flaggedNegativeAt: Date | null
 }
@@ -111,7 +113,12 @@ export async function lockStockTx(
   itemId: string,
 ): Promise<LockedStock> {
   const [item] = await tx
-    .select({ fractional: items.fractional, active: items.active })
+    .select({
+      fractional: items.fractional,
+      active: items.active,
+      itemName: items.name,
+      baseUnit: items.baseUnit,
+    })
     .from(items)
     .where(and(eq(items.id, itemId), eq(items.businessId, businessId)))
     .for('share')
@@ -560,7 +567,14 @@ async function writeStock(
         action: 'stock.adjust',
         entityType: 'stock_movement',
         entityId: movementId,
-        data: { outletId: w.outletId, itemId: w.itemId, deltaMilli: qtyMilli, reason: w.reason },
+        data: {
+          outletId: w.outletId,
+          itemId: w.itemId,
+          itemName: locked.itemName,
+          baseUnit: locked.baseUnit,
+          deltaMilli: qtyMilli,
+          reason: w.reason,
+        },
       })
     }
     return loadMovement(tx, ctx.businessId, movementId)
@@ -610,7 +624,7 @@ export async function adjustStock(
     { outletId: i.outletId, itemId: i.itemId, kind: 'adjust', reason: i.reason, note, unitCostCents: null },
     (locked) => {
       assertWhole(locked.fractional, delta)
-      if (locked.onHandMilli + delta < 0) throw new DomainError('invalid_input', BELOW_ZERO)
+      if (delta < 0 && locked.onHandMilli + delta < 0) throw new DomainError('invalid_input', BELOW_ZERO)
       return delta
     },
   )

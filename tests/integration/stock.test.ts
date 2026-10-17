@@ -225,6 +225,37 @@ describe('adjustStock and countStock', () => {
     expect(await db.select().from(auditLog).where(eq(auditLog.action, 'stock.adjust'))).toHaveLength(0)
   })
 
+  it('allows an adjustment that raises negative stock without reaching zero, and still refuses a drop', async () => {
+    const { ctx, ktl, item, businessId } = await setup()
+    await db.transaction((tx) =>
+      applyMovement(tx, {
+        businessId,
+        outletId: ktl,
+        itemId: item.id,
+        kind: 'collect',
+        qtyMilli: -5000,
+        actorUserId: ctx.userId,
+      }),
+    )
+    const m = await adjustStock(db, ctx, { outletId: ktl, itemId: item.id, deltaMilli: 2000, reason: 'damaged' })
+    expect(m.qtyMilli).toBe(2000)
+    expect(await onHand(ktl, item.id)).toBe(-3000)
+    await expectDomain(
+      adjustStock(db, ctx, { outletId: ktl, itemId: item.id, deltaMilli: -1000, reason: 'lost_stolen' }),
+      'invalid_input',
+      'That would take stock below zero.',
+    )
+    expect(await onHand(ktl, item.id)).toBe(-3000)
+  })
+
+  it('records the item name and unit on the adjustment audit row', async () => {
+    const { ctx, ktl, item } = await setup()
+    await receiveStock(db, ctx, { outletId: ktl, itemId: item.id, qtyMilli: 8000 })
+    await adjustStock(db, ctx, { outletId: ktl, itemId: item.id, deltaMilli: -1000, reason: 'damaged' })
+    const [row] = await db.select().from(auditLog).where(eq(auditLog.action, 'stock.adjust'))
+    expect(row.data).toMatchObject({ itemName: 'Iron sheet 30G 3m', baseUnit: 'sheet', deltaMilli: -1000, reason: 'damaged' })
+  })
+
   it('applies a valid adjustment with an audit row', async () => {
     const { ctx, ktl, item } = await setup()
     await receiveStock(db, ctx, { outletId: ktl, itemId: item.id, qtyMilli: 8000 })
@@ -238,7 +269,14 @@ describe('adjustStock and countStock', () => {
     expect(m).toMatchObject({ kind: 'adjust', qtyMilli: -1000, reason: 'damaged', note: 'dropped' })
     expect(await onHand(ktl, item.id)).toBe(7000)
     const [a] = await db.select().from(auditLog).where(eq(auditLog.action, 'stock.adjust'))
-    expect(a.data).toEqual({ outletId: ktl, itemId: item.id, deltaMilli: -1000, reason: 'damaged' })
+    expect(a.data).toEqual({
+      outletId: ktl,
+      itemId: item.id,
+      itemName: item.name,
+      baseUnit: item.baseUnit,
+      deltaMilli: -1000,
+      reason: 'damaged',
+    })
   })
 
   it('requires a note for reason other, and validates delta, reason and note length', async () => {

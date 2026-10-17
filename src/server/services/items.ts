@@ -547,7 +547,7 @@ export async function getItem(db: Db, ctx: TenantCtx, id: string): Promise<Item>
 
 /**
  * Resolve a scanned code to its item (and pack, for pack barcodes). `null` for an unknown
- * or malformed code and for an inactive item.
+ * or malformed code, an inactive item and a barcode on an inactive pack.
  */
 export async function lookupBarcode(
   db: Db,
@@ -571,8 +571,10 @@ export async function lookupBarcode(
   if (!hit) return null
   const item = await loadItem(db, ctx.businessId, hit.itemId)
   if (!item) return null
-  const pack = hit.packId ? (item.packs.find((p) => p.id === hit.packId) ?? null) : null
-  return { item, pack }
+  if (!hit.packId) return { item, pack: null }
+  // A barcode on a pack that has been deactivated no longer sells.
+  const pack = item.packs.find((p) => p.id === hit.packId)
+  return pack && pack.active ? { item, pack } : null
 }
 
 // -------------------------------------------------------------------- writes
@@ -698,10 +700,12 @@ export async function updatePack(
       const scope = and(eq(itemPacks.id, packId), eq(itemPacks.businessId, ctx.businessId))
       const [existing] = await tx.select().from(itemPacks).where(scope).for('update')
       if (!existing) throw new DomainError('not_found')
+      // Share-lock the parent so its `fractional` can't change (updateItem takes FOR UPDATE) mid-validation.
       const [item] = await tx
         .select({ fractional: items.fractional })
         .from(items)
         .where(and(eq(items.id, existing.itemId), eq(items.businessId, ctx.businessId)))
+        .for('share')
       if (!item) throw new DomainError('not_found')
 
       const v = validatePackInput(

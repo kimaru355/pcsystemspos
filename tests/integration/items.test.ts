@@ -554,6 +554,22 @@ describe('lookupBarcode', () => {
     expect(await lookupBarcode(db, other.ctx, '6001234567890')).toBeNull()
   })
 
+  it('returns null for a barcode on an inactive pack, and resolves it again once reactivated', async () => {
+    const { ctx } = await setup()
+    const a = await createItem(db, ctx, sheet)
+    const bundle = await addPack(db, ctx, a.id, {
+      name: 'Bundle',
+      baseQtyMilli: 20000,
+      priceCents: 1800000,
+      floorCents: 1700000,
+    })
+    await addBarcode(db, ctx, a.id, { barcode: '222', packId: bundle.id })
+    await updatePack(db, ctx, bundle.id, { active: false })
+    expect(await lookupBarcode(db, ctx, '222')).toBeNull()
+    await updatePack(db, ctx, bundle.id, { active: true })
+    expect((await lookupBarcode(db, ctx, '222'))?.pack?.id).toBe(bundle.id)
+  })
+
   it('returns null for an inactive item', async () => {
     const { ctx } = await setup()
     const a = await createItem(db, ctx, sheet)
