@@ -1,4 +1,5 @@
-import { boolean, pgEnum, pgTable, timestamp, unique, uuid, varchar, text } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { boolean, check, pgEnum, pgTable, timestamp, unique, uuid, varchar, text } from 'drizzle-orm/pg-core'
 
 export const connectionMode = pgEnum('connection_mode', ['full_offline', 'default', 'always_online'])
 export const businessStatus = pgEnum('business_status', ['active', 'suspended'])
@@ -25,5 +26,8 @@ export const outlets = pgTable(
     active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique('outlets_business_code_unique').on(t.businessId, t.code)],
+  (t) => [
+    unique('outlets_business_code_unique').on(t.businessId, t.code),
+    check('outlets_code_format', sql`${t.code} ~ '^[A-Z0-9]{2,5}$'`),
+  ],
 )

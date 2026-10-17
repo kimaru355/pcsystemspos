@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
@@ -26,24 +27,31 @@ export const users = pgTable(
     isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check('users_email_or_phone', sql`${t.email} is not null or ${t.phone} is not null`)],
+  (t) => [
+    check('users_email_or_phone', sql`${t.email} is not null or ${t.phone} is not null`),
+    uniqueIndex('users_email_lower_unique').on(sql`lower(${t.email})`),
+  ],
 )
 
-export const memberships = pgTable('memberships', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  businessId: uuid('business_id')
-    .notNull()
-    .references(() => businesses.id),
-  // unique: a user belongs to at most one business in the MVP
-  userId: uuid('user_id')
-    .notNull()
-    .unique()
-    .references(() => users.id),
-  role: role('role').notNull(),
-  pinHash: text('pin_hash'),
-  active: boolean('active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+export const memberships = pgTable(
+  'memberships',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    // unique: a user belongs to at most one business in the MVP
+    userId: uuid('user_id')
+      .notNull()
+      .unique()
+      .references(() => users.id),
+    role: role('role').notNull(),
+    pinHash: text('pin_hash'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('memberships_business_id_idx').on(t.businessId)],
+)
 
 export const membershipOutlets = pgTable(
   'membership_outlets',
@@ -59,18 +67,25 @@ export const membershipOutlets = pgTable(
       .references(() => outlets.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.membershipId, t.outletId] })],
+  (t) => [
+    primaryKey({ columns: [t.membershipId, t.outletId] }),
+    index('membership_outlets_outlet_id_idx').on(t.outletId),
+  ],
 )
 
-export const sessions = pgTable('sessions', {
-  /** sha256 hex of the session token */
-  id: text('id').primaryKey(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+export const sessions = pgTable(
+  'sessions',
+  {
+    /** sha256 hex of the session token */
+    id: text('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('sessions_user_id_idx').on(t.userId)],
+)
 
 export const loginAttempts = pgTable(
   'login_attempts',
