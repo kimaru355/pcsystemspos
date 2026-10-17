@@ -46,7 +46,7 @@ export const NAV: Record<NavKey, { root: string; label: string; groups: NavGroup
       {
         label: 'Stock',
         items: [
-          { href: '/admin/items', label: 'Items', icon: Package, soon: true },
+          { href: '/admin/items', label: 'Items', icon: Package },
           { href: '/admin/stock', label: 'Stock', icon: Boxes, soon: true },
         ],
       },

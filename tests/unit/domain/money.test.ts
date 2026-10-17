@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatAmount,
   formatKes,
   formatQty,
   lineGross,
@@ -86,5 +87,15 @@ describe('safe-integer guards', () => {
   it('still accepts values at the edge of safety', () => {
     expect(parseQty('9007199254740.991')).toBe(Number.MAX_SAFE_INTEGER)
     expect(lineGross(1000, 100)).toBe(100)
+  })
+})
+
+describe('formatAmount', () => {
+  it('formats cents for a field and round-trips through parseMoney', () => {
+    expect(formatAmount(95000)).toBe('950')
+    expect(formatAmount(125050)).toBe('1,250.50')
+    expect(formatAmount(0)).toBe('0')
+    expect(formatAmount(5)).toBe('0.05')
+    for (const c of [0, 5, 95000, 125050, 99999999]) expect(parseMoney(formatAmount(c))).toBe(c)
   })
 })

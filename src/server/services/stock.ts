@@ -393,6 +393,69 @@ export async function listStock(
   return loadStockRows(db, ctx.businessId, outletId, f)
 }
 
+export type ItemOutletStock = {
+  outletId: string
+  outletCode: string
+  outletName: string
+  onHandMilli: Milli
+  owedMilli: Milli
+  availableMilli: Milli
+  isLow: boolean
+  negative: boolean
+}
+
+/** One item's stock at each active outlet in scope (owners: all), ordered by outlet code. */
+export async function itemStockByOutlet(db: Db, ctx: TenantCtx, itemId: string): Promise<ItemOutletStock[]> {
+  if (!isUuid(itemId)) throw new DomainError('not_found')
+  assertCan(ctx, 'stock.view')
+  const [item] = await db
+    .select({ lowStockMilli: items.lowStockMilli })
+    .from(items)
+    .where(and(eq(items.id, itemId), eq(items.businessId, ctx.businessId)))
+  if (!item) throw new DomainError('not_found')
+  if (ctx.outletScope !== 'all' && ctx.outletScope.length === 0) return []
+  const rows = await db
+    .select({
+      outletId: outlets.id,
+      outletCode: outlets.code,
+      outletName: outlets.name,
+      onHandMilli: outletStock.onHandMilli,
+    })
+    .from(outlets)
+    .leftJoin(
+      outletStock,
+      and(
+        eq(outletStock.outletId, outlets.id),
+        eq(outletStock.itemId, itemId),
+        eq(outletStock.businessId, ctx.businessId),
+      ),
+    )
+    .where(
+      and(
+        eq(outlets.businessId, ctx.businessId),
+        eq(outlets.active, true),
+        ctx.outletScope === 'all' ? undefined : inArray(outlets.id, ctx.outletScope),
+      ),
+    )
+    .orderBy(asc(outlets.code), asc(outlets.id))
+  const owed = await Promise.all(rows.map((r) => owedMilliFor(db, r.outletId, [itemId])))
+  return rows.map((r, i) => {
+    const onHand = r.onHandMilli ?? 0
+    const owedMilli = owed[i].get(itemId) ?? 0
+    const available = availableMilli(onHand, owedMilli)
+    return {
+      outletId: r.outletId,
+      outletCode: r.outletCode,
+      outletName: r.outletName,
+      onHandMilli: onHand,
+      owedMilli,
+      availableMilli: available,
+      isLow: isLowStock(available, item.lowStockMilli),
+      negative: onHand < 0,
+    }
+  })
+}
+
 /** Newest first. */
 export async function itemHistory(
   db: Db,

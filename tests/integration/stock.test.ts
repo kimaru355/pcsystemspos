@@ -9,6 +9,7 @@ import {
   applyMovement,
   countStock,
   itemHistory,
+  itemStockByOutlet,
   listStock,
   lowStockCounts,
   owedMilliFor,
@@ -354,6 +355,35 @@ describe('lowStockCounts', () => {
     expect(await lowStockCounts(db, mgr)).toEqual([])
     await db.update(outlets).set({ active: false }).where(eq(outlets.id, ktl))
     expect(await lowStockCounts(db, ctx)).toEqual([])
+  })
+})
+
+describe('itemStockByOutlet', () => {
+  beforeEach(resetDb)
+
+  it('lists on-hand per active outlet in scope, zero where nothing was received', async () => {
+    const { ctx, ktl, eld, item } = await setup()
+    await receiveStock(db, ctx, { outletId: ktl, itemId: item.id, qtyMilli: 5000 })
+    const rows = await itemStockByOutlet(db, ctx, item.id)
+    expect(rows.map((r) => [r.outletCode, r.onHandMilli, r.isLow])).toEqual([
+      ['ELD', 0, true],
+      ['KTL', 5000, true],
+    ])
+    await receiveStock(db, ctx, { outletId: eld, itemId: item.id, qtyMilli: 50000 })
+    expect((await itemStockByOutlet(db, ctx, item.id)).map((r) => r.isLow)).toEqual([false, true])
+
+    const mgr = await hire(ctx, 'manager', [ktl])
+    expect((await itemStockByOutlet(db, mgr, item.id)).map((r) => r.outletCode)).toEqual(['KTL'])
+    await db.update(outlets).set({ active: false }).where(eq(outlets.id, ktl))
+    expect((await itemStockByOutlet(db, ctx, item.id)).map((r) => r.outletCode)).toEqual(['ELD'])
+  })
+
+  it('is not_found for an unknown, malformed or other-business item', async () => {
+    const { ctx, item } = await setup()
+    const other = await seedBusiness({ outletCodes: ['OTH'] })
+    const otherCtx = (await getTenantCtx(db, other.owner.userId))!
+    await expectDomain(itemStockByOutlet(db, ctx, 'nope'), 'not_found')
+    await expectDomain(itemStockByOutlet(db, otherCtx, item.id), 'not_found')
   })
 })
 

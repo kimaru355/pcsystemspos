@@ -50,6 +50,11 @@ export function formatKes(c: Cents): string {
   return `${sign}KES ${whole}.${frac}`
 }
 
+/** Cents as typed in a field, without the currency: 95000 -> "950", 125050 -> "1,250.50". */
+export function formatAmount(c: Cents): string {
+  return formatKes(c).replace(/^(-?)KES /, '$1').replace(/\.00$/, '')
+}
+
 /** Gross value of a line: quantity (thousandths) x unit price (cents), rounded to whole cents. */
 export function lineGross(qtyMilli: Milli, unitPriceCents: Cents): Cents {
   return Math.round(assertSafe(qtyMilli * unitPriceCents, 'Line value') / 1000)
