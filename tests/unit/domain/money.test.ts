@@ -69,3 +69,22 @@ describe('vatPortion', () => {
     expect(vatPortion(75000, 0)).toBe(0)
   })
 })
+
+describe('safe-integer guards', () => {
+  it('parseQty throws RangeError past the safe integer range', () => {
+    expect(() => parseQty('9007199254740.993')).toThrow(RangeError)
+  })
+
+  it('parseMoney throws RangeError past the safe integer range', () => {
+    expect(() => parseMoney('90071992547409.93')).toThrow(RangeError)
+  })
+
+  it('lineGross throws RangeError when the product is unsafe', () => {
+    expect(() => lineGross(Number.MAX_SAFE_INTEGER, 2)).toThrow(RangeError)
+  })
+
+  it('still accepts values at the edge of safety', () => {
+    expect(parseQty('9007199254740.991')).toBe(Number.MAX_SAFE_INTEGER)
+    expect(lineGross(1000, 100)).toBe(100)
+  })
+})

@@ -11,11 +11,16 @@ function scaled(input: string, places: number): number {
   return Number(whole) * 10 ** places + Number(frac.padEnd(places, '0') || '0')
 }
 
+function assertSafe(n: number, what: string): number {
+  if (!Number.isSafeInteger(n)) throw new RangeError(`${what} is too large`)
+  return n
+}
+
 /** Parse a quantity such as "2.5" into thousandths (2500). Max 3 decimals, non-negative. */
 export function parseQty(input: string): Milli {
   const s = input.trim()
   if (!QTY_RE.test(s)) throw new RangeError(`Invalid quantity: ${JSON.stringify(input)}`)
-  return scaled(s, 3)
+  return assertSafe(scaled(s, 3), 'Quantity')
 }
 
 /** Format thousandths as a decimal string with trailing zeros trimmed (2500 -> "2.5"). */
@@ -33,7 +38,7 @@ export function formatQty(q: Milli): string {
 export function parseMoney(input: string): Cents {
   const s = input.trim()
   if (!MONEY_RE.test(s)) throw new RangeError(`Invalid amount: ${JSON.stringify(input)}`)
-  return scaled(s.replace(/,/g, ''), 2)
+  return assertSafe(scaled(s.replace(/,/g, ''), 2), 'Amount')
 }
 
 /** Format cents as "KES 1,250.00" (negatives as "-KES 50.00"). Locale-independent. */
@@ -47,7 +52,7 @@ export function formatKes(c: Cents): string {
 
 /** Gross value of a line: quantity (thousandths) x unit price (cents), rounded to whole cents. */
 export function lineGross(qtyMilli: Milli, unitPriceCents: Cents): Cents {
-  return Math.round((qtyMilli * unitPriceCents) / 1000)
+  return Math.round(assertSafe(qtyMilli * unitPriceCents, 'Line value') / 1000)
 }
 
 /** VAT contained in a VAT-inclusive gross amount, given the rate in basis points. */
