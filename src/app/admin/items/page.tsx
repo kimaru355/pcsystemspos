@@ -14,7 +14,7 @@ import { buildCategoryTree } from './category-tree'
 import { CategoryOptions } from './item-forms'
 import { ItemsNav } from './items-nav'
 import { StatusBadge } from './status-badge'
-import { inputClass } from './styles'
+import { inputClass } from '../_forms/styles'
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
 

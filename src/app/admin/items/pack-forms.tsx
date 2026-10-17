@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { formatAmount, formatQty } from '@/domain/money'
 import type { Item, Pack } from '@/server/services/items'
 import { addPackAction, updatePackAction } from './actions'
-import { Field, Message, useKeptForm } from './form-kit'
+import { Field, Message, useKeptForm } from '../_forms/form-kit'
 
 const GRID = 'grid gap-x-3 gap-y-2 sm:grid-cols-[minmax(0,1fr)_7rem_8rem_8rem]'
 

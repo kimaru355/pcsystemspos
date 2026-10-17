@@ -6,11 +6,13 @@ import { db } from '@/db/client'
 import { can } from '@/domain/permissions'
 import { ConfirmationThread, type Confirmation } from '@/components/shell/confirmation-line'
 import { PageHeader } from '@/components/shell/page-header'
+import { Region } from '@/components/shell/region'
 import { SettlementBar } from '@/components/shell/settlement-bar'
 import { readOutletFilter } from '@/server/outlet-filter'
 import { listRecentActivity } from '@/server/services/activity'
 import { listOutlets } from '@/server/services/outlets'
 import { listStaff } from '@/server/services/staff'
+import { lowStockCounts } from '@/server/services/stock'
 import { requireTenant } from '@/server/tenant'
 import { toConfirmation } from './activity-lines'
 
@@ -37,37 +39,14 @@ const dayLabel = new Intl.DateTimeFormat('en-KE', {
   timeZone: 'Africa/Nairobi',
 })
 
-/** Unboxed region: a one-pixel rule above, the heading, then the content. */
-function Region({
-  id,
-  title,
-  aside,
-  size = 'lg',
-  children,
-}: {
-  id: string
-  title: string
-  aside?: React.ReactNode
-  size?: 'lg' | 'sm'
-  children: React.ReactNode
-}) {
-  return (
-    <section aria-labelledby={id} className="border-t border-foreground/80 pt-3">
-      <div className="flex items-baseline justify-between gap-4 pb-2">
-        <h2 id={id} className={size === 'lg' ? 'text-lg font-semibold' : 'text-sm font-semibold'}>
-          {title}
-        </h2>
-        {aside}
-      </div>
-      {children}
-    </section>
-  )
-}
-
 async function OverviewContent() {
   const ctx = await requireTenant()
   const isOwner = can(ctx.role, 'business.settings')
-  const [outlets, staff] = await Promise.all([listOutlets(db, ctx), listStaff(db, ctx)])
+  const [outlets, staff, lowStock] = await Promise.all([
+    listOutlets(db, ctx),
+    listStaff(db, ctx),
+    lowStockCounts(db, ctx),
+  ])
   const activity = await listRecentActivity(db, ctx, {
     outletIds: outlets.map((o) => o.id),
     membershipIds: staff.map((s) => s.membershipId),
@@ -75,6 +54,13 @@ async function OverviewContent() {
   const active = outlets.filter((o) => o.active)
   const filter = await readOutletFilter(active.map((o) => o.id))
   const scoped = filter === 'all' ? null : active.find((o) => o.id === filter)
+
+  const lowRows = lowStock
+    .filter((l) => !scoped || l.outletId === scoped.id)
+    .flatMap((l) => {
+      const o = active.find((a) => a.id === l.outletId)
+      return o ? [{ ...o, count: l.count }] : []
+    })
 
   const names = {
     outlets: new Map(outlets.map((o) => [o.id, { code: o.code, name: o.name }])),
@@ -114,7 +100,7 @@ async function OverviewContent() {
       detail: tillStaff.length > 0 ? `${withPin} of ${tillStaff.length} set` : 'After adding staff',
       href: '/admin/staff',
     },
-    { done: false, label: 'Add items and prices', detail: 'Coming next', href: null },
+    { done: false, label: 'Add items and prices', detail: 'Add or import your items', href: '/admin/items' },
   ]
   const remaining = steps.filter((s) => !s.done).length
 
@@ -167,6 +153,39 @@ async function OverviewContent() {
               Once the till takes orders, this shows what was paid, what customers collected and what is
               still owed across {scoped ? scoped.name : 'your outlets'}.
             </p>
+          </Region>
+
+          <Region
+            id="low-stock-heading"
+            title="Low stock"
+            size="sm"
+            aside={
+              <Link href="/admin/stock" className="text-xs text-primary underline-offset-4 hover:underline">
+                All stock
+              </Link>
+            }
+          >
+            {lowRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing is running low.</p>
+            ) : (
+              <ul className="divide-y divide-rule">
+                {lowRows.map((o) => (
+                  <li key={o.id}>
+                    <Link
+                      href={`/admin/stock?outlet=${o.id}&low=1`}
+                      className="-mx-2 flex items-baseline gap-3 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="w-14 font-mono text-[0.8rem] font-medium">{o.code}</span>
+                      <span className="min-w-0 flex-1 truncate">{o.name}</span>
+                      <span className="figures font-semibold text-owed-ink">
+                        {o.count} low
+                      </span>
+                      <ChevronRight aria-hidden className="size-4 self-center text-muted-foreground" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Region>
 
           {isOwner && (

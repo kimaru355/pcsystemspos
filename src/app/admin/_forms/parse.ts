@@ -36,3 +36,23 @@ export function qty(formData: FormData, key: string): Milli {
 export function optionalQty(formData: FormData, key: string): Milli | null {
   return text(formData, key).trim() === '' ? null : qty(formData, key)
 }
+
+/** Blank -> null. */
+export function optionalMoney(formData: FormData, key: string): Cents | null {
+  return text(formData, key).trim() === '' ? null : money(formData, key)
+}
+
+/** A quantity with an optional leading + or - ("-2.5"), for stock changes. */
+export function signedQty(formData: FormData, key: string): Milli {
+  const raw = text(formData, key).trim()
+  const negative = raw.startsWith('-')
+  const body = raw.startsWith('-') || raw.startsWith('+') ? raw.slice(1).trim() : raw
+  let value: Milli
+  try {
+    value = parseQty(body)
+  } catch (e) {
+    if (e instanceof RangeError) throw new FieldError(key, 'Enter a change like 5 or -2.5')
+    throw e
+  }
+  return negative ? -value : value
+}

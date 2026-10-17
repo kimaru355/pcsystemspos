@@ -41,6 +41,9 @@ export const IMPORT_COLUMNS: readonly string[] = [
 
 export const MAX_IMPORT_ROWS = 5000
 
+/** The largest CSV the admin screen accepts: 2 MB. The import service refuses longer text too. */
+export const MAX_IMPORT_BYTES = 2_000_000
+
 const REQUIRED_COLUMNS = ['name', 'base_unit', 'price'] as const
 const PACK_NUMBERS = [1, 2] as const
 const STOCK_PREFIX = 'stock_'

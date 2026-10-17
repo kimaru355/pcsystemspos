@@ -11,8 +11,8 @@ import {
   updateGroup,
 } from '@/server/services/taxonomy'
 import { requireTenant } from '@/server/tenant'
-import { done, failure, type FormState } from './form-state'
-import { optionalId, text } from './parse'
+import { done, failure, type FormState } from '../_forms/form-state'
+import { optionalId, text } from '../_forms/parse'
 
 /** Comma-separated attribute names -> list; blanks are dropped, the service validates the rest. */
 function keys(formData: FormData): string[] {

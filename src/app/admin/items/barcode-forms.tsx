@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { Item } from '@/server/services/items'
 import { addBarcodeAction, removeBarcodeAction } from './actions'
-import { Field, Message, useKeptForm } from './form-kit'
+import { Field, Message, useKeptForm } from '../_forms/form-kit'
 
 export function AddBarcodeForm({ item }: { item: Item }) {
   const f = useKeptForm(addBarcodeAction)

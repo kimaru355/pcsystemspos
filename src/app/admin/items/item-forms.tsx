@@ -7,7 +7,7 @@ import { TAX_CATEGORIES, TAX_LABELS } from '@/domain/tax'
 import type { Item } from '@/server/services/items'
 import type { CategoryNode } from './category-tree'
 import { createItemAction, updateItemAction } from './actions'
-import { Field, Message, useKeptForm } from './form-kit'
+import { Field, Message, useKeptForm } from '../_forms/form-kit'
 
 export type GroupOption = {
   id: string
