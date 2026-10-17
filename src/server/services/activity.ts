@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { auditLog, users } from '@/db/schema'
 import { can } from '@/domain/permissions'
@@ -27,8 +27,10 @@ export async function listRecentActivity(
 ): Promise<ActivityEntry[]> {
   const owner = can(ctx.role, 'business.settings')
   if (!owner && visible.outletIds.length === 0 && visible.membershipIds.length === 0) return []
+  // An import stamps `importId` on its per-entity rows; the feed shows only its `catalog.import` summary.
+  const notImportDetail = or(eq(auditLog.action, 'catalog.import'), sql`${auditLog.data} ->> 'importId' is null`)
   const scope = owner
-    ? eq(auditLog.businessId, ctx.businessId)
+    ? and(eq(auditLog.businessId, ctx.businessId), notImportDetail)
     : and(
         eq(auditLog.businessId, ctx.businessId),
         or(
@@ -54,6 +56,6 @@ export async function listRecentActivity(
     .from(auditLog)
     .innerJoin(users, eq(users.id, auditLog.actorUserId))
     .where(scope)
-    .orderBy(desc(auditLog.createdAt))
+    .orderBy(desc(auditLog.createdAt), desc(auditLog.seq))
     .limit(Math.min(Math.max(limit, 1), 50))
 }

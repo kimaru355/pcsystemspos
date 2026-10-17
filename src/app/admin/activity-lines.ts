@@ -1,4 +1,6 @@
 import { MODE_LABELS, type ConnectionMode } from '@/domain/connection-modes'
+import { ADJUST_REASON_LABELS, type AdjustReason } from '@/domain/stock'
+import { formatQty } from '@/domain/money'
 import { ROLE_LABELS, type Role } from '@/domain/permissions'
 import type { Confirmation } from '@/components/shell/confirmation-line'
 import type { ActivityEntry } from '@/server/services/activity'
@@ -21,11 +23,142 @@ function modeLabel(m: unknown): string {
   return m === null ? 'business default' : (MODE_LABELS[m as ConnectionMode] ?? String(m))
 }
 
+function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+function text(v: unknown, fallback: string): string {
+  return typeof v === 'string' && v !== '' ? v : fallback
+}
+
+const ITEM_FIELDS: [string, string][] = [
+  ['name', 'name'],
+  ['sku', 'SKU'],
+  ['baseUnit', 'unit'],
+  ['fractional', 'fractions setting'],
+  ['priceCents', 'price'],
+  ['floorCents', 'lowest price'],
+  ['taxCategory', 'tax category'],
+  ['lowStockMilli', 'low stock level'],
+  ['groupId', 'group'],
+  ['categoryId', 'category'],
+  ['brandId', 'brand'],
+  ['attributes', 'attributes'],
+]
+const PACK_FIELDS: [string, string][] = [
+  ['name', 'name'],
+  ['baseQtyMilli', 'size'],
+  ['priceCents', 'price'],
+  ['floorCents', 'lowest price'],
+]
+
+/** "price, SKU changed" style summary of the fields that differ, then reopened/deactivated. */
+function changeSummary(before: Record<string, unknown>, after: Record<string, unknown>, fields: [string, string][]): string {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  const changed = fields.filter(([key]) => !same(before[key], after[key])).map(([, label]) => label)
+  const parts: string[] = []
+  if (changed.length) parts.push(`${changed.join(', ')} changed`)
+  if (before.active !== after.active) parts.push(after.active ? 'reactivated' : 'deactivated')
+  return parts.join(', ')
+}
+
+/** Confirmation line for the catalog, stock and import audit actions; null for any other action. */
+function catalogConfirmation(e: ActivityEntry, data: Record<string, unknown>, names: Names): Confirmation | null {
+  const by = e.actorName
+  const at = e.at
+  const before = rec(data.before)
+  const after = rec(data.after)
+  const withSummary = (name: string, summary: string) => `${name}${summary ? `: ${summary}` : ''}.`
+
+  switch (e.action) {
+    case 'item.create':
+      return { code: text(data.sku, 'ITEM'), status: 'Item added', detail: `${text(data.name, 'An item')}.`, by, at }
+    case 'item.update':
+      return {
+        code: text(after.sku, 'ITEM'),
+        status: 'Item updated',
+        detail: withSummary(text(after.name, 'An item'), changeSummary(before, after, ITEM_FIELDS)),
+        by,
+        at,
+      }
+    case 'pack.create': {
+      const qty = typeof data.baseQtyMilli === 'number' ? `, ${formatQty(data.baseQtyMilli)} units` : ''
+      return { code: 'PACK', status: 'Pack added', detail: `${text(data.name, 'A pack')}${qty}.`, by, at }
+    }
+    case 'pack.update':
+      return {
+        code: 'PACK',
+        status: 'Pack updated',
+        detail: withSummary(text(after.name, 'A pack'), changeSummary(before, after, PACK_FIELDS)),
+        by,
+        at,
+      }
+    case 'barcode.add':
+      return { code: text(data.barcode, 'CODE'), status: 'Barcode added', detail: `to ${data.packId ? 'a pack' : 'an item'}.`, by, at }
+    case 'barcode.remove':
+      return { code: text(data.barcode, 'CODE'), status: 'Barcode removed', detail: `from ${data.packId ? 'a pack' : 'an item'}.`, by, at }
+    case 'category.create':
+      return { code: 'CAT', status: 'Category added', detail: `${text(data.name, 'A category')}.`, by, at }
+    case 'category.update': {
+      const name = text(after.name, 'A category')
+      const renamed = before.name !== after.name ? `renamed from ${text(before.name, '')}` : ''
+      const active = before.active !== after.active ? (after.active ? 'reactivated' : 'deactivated') : ''
+      return { code: 'CAT', status: 'Category updated', detail: withSummary(name, [renamed, active].filter(Boolean).join(', ')), by, at }
+    }
+    case 'brand.create':
+      return { code: 'BRND', status: 'Brand added', detail: `${text(data.name, 'A brand')}.`, by, at }
+    case 'brand.update': {
+      const renamed = before.name !== after.name ? `renamed from ${text(before.name, '')}` : ''
+      const active = before.active !== after.active ? (after.active ? 'reactivated' : 'deactivated') : ''
+      return { code: 'BRND', status: 'Brand updated', detail: withSummary(text(after.name, 'A brand'), [renamed, active].filter(Boolean).join(', ')), by, at }
+    }
+    case 'group.create':
+      return { code: 'GRP', status: 'Group added', detail: `${text(data.name, 'A group')}.`, by, at }
+    case 'group.update': {
+      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+      const parts: string[] = []
+      if (before.name !== after.name) parts.push(`renamed from ${text(before.name, '')}`)
+      if (!same(before.attributeKeys, after.attributeKeys)) parts.push('attributes changed')
+      if (before.active !== after.active) parts.push(after.active ? 'reactivated' : 'deactivated')
+      return { code: 'GRP', status: 'Group updated', detail: withSummary(text(after.name, 'A group'), parts.join(', ')), by, at }
+    }
+    case 'stock.adjust': {
+      const outlet = names.outlets.get(String(data.outletId))
+      const delta = typeof data.deltaMilli === 'number' ? data.deltaMilli : 0
+      const qty = `${delta > 0 ? '+' : ''}${formatQty(delta)}`
+      const unit = typeof data.baseUnit === 'string' ? ` ${data.baseUnit}` : ''
+      const reason = ADJUST_REASON_LABELS[data.reason as AdjustReason]?.toLowerCase() ?? text(data.reason, 'no reason')
+      return {
+        code: outlet?.code ?? 'STK',
+        status: 'Stock adjusted',
+        detail: `${text(data.itemName, 'An item')} ${qty}${unit}, ${reason}.`,
+        by,
+        at,
+      }
+    }
+    case 'catalog.import': {
+      const n = (v: unknown) => (typeof v === 'number' ? v : 0)
+      return {
+        code: 'IMP',
+        status: 'Catalog imported',
+        detail: `${plural(n(data.itemCount), 'item')}, ${plural(n(data.packCount), 'pack')}, ${plural(n(data.stockCells), 'opening stock entry', 'opening stock entries')}.`,
+        by,
+        at,
+      }
+    }
+    default:
+      return null
+  }
+}
+
 /** Turns an audit row into a confirmation line: code first, then what happened. */
 export function toConfirmation(e: ActivityEntry, names: Names): Confirmation {
   const data = rec(e.data)
   const by = e.actorName
   const at = e.at
+
+  const catalog = catalogConfirmation(e, data, names)
+  if (catalog) return catalog
 
   if (e.entityType === 'outlet') {
     const o = names.outlets.get(e.entityId)

@@ -111,6 +111,7 @@ export const items = pgTable(
       .on(t.businessId, t.sku)
       .where(sql`${t.sku} is not null`),
     check('items_floor_le_price', sql`${t.floorCents} >= 0 and ${t.floorCents} <= ${t.priceCents}`),
+    check('items_low_stock_nonneg', sql`${t.lowStockMilli} is null or ${t.lowStockMilli} >= 0`),
   ],
 )
 

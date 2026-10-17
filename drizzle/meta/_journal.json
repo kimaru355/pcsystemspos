@@ -15,6 +15,13 @@
       "when": 1792205118559,
       "tag": "0001_stormy_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792271150745,
+      "tag": "0002_married_ma_gnuci",
+      "breakpoints": true
     }
   ]
 }

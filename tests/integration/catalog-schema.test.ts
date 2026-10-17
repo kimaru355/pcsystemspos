@@ -84,6 +84,13 @@ describe('catalog schema constraints', () => {
       const { businessId } = await seedBusiness()
       expect(await pgCode(newItem(businessId, { priceCents: 100, floorCents: 101 }))).toBe('23514')
     })
+
+    it('rejects a negative low-stock level and accepts null or 0', async () => {
+      const { businessId } = await seedBusiness()
+      expect(await pgCode(newItem(businessId, { lowStockMilli: -1 }))).toBe('23514')
+      expect(await pgCode(newItem(businessId, { lowStockMilli: 0 }))).toBeUndefined()
+      expect(await pgCode(newItem(businessId, { lowStockMilli: null }))).toBeUndefined()
+    })
   })
 
   describe('item_packs', () => {
@@ -169,6 +176,15 @@ describe('catalog schema constraints', () => {
         db.insert(stockMovements).values({ ...b, kind: 'receive', qtyMilli: 5000 }),
       )
       expect(code).toBeUndefined()
+    })
+
+    it('rejects a negative unit cost and accepts null or 0', async () => {
+      const b = await base()
+      const insert = (unitCostCents: number | null) =>
+        pgCode(db.insert(stockMovements).values({ ...b, kind: 'receive', qtyMilli: 1000, unitCostCents }))
+      expect(await insert(-1)).toBe('23514')
+      expect(await insert(0)).toBeUndefined()
+      expect(await insert(null)).toBeUndefined()
     })
 
     it('rejects a receive with negative quantity', async () => {

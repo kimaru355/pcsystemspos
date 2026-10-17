@@ -56,6 +56,8 @@ export const stockMovements = pgTable(
     check('stock_movements_collect_negative', sql`${t.kind} <> 'collect' or ${t.qtyMilli} < 0`),
     check('stock_movements_adjust_reason', sql`${t.kind} <> 'adjust' or ${t.reason} is not null`),
     check('stock_movements_other_note', sql`${t.reason} <> 'other' or ${t.note} is not null`),
+    check('stock_movements_unit_cost_nonneg', sql`${t.unitCostCents} is null or ${t.unitCostCents} >= 0`),
+    index('stock_movements_business_item_idx').on(t.businessId, t.itemId),
     index('stock_movements_business_outlet_item_occurred_idx').on(
       t.businessId,
       t.outletId,
