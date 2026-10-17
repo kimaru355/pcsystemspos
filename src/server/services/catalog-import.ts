@@ -19,7 +19,14 @@ import {
   type ValidPack,
 } from './items'
 import { applyMovement } from './stock'
-import { findOrCreateBrandTx, findOrCreateCategoryTx, findOrCreateGroupTx } from './taxonomy'
+import {
+  findOrCreateBrandTx,
+  findOrCreateCategoryTx,
+  findOrCreateGroupTx,
+  validateBrandInput,
+  validateCategoryInput,
+  validateGroupInput,
+} from './taxonomy'
 
 /*
  * CSV catalog import (create-only): preview, then apply in one transaction.
@@ -114,6 +121,22 @@ function planRow(row: ImportRow, errors: ImportError[]): PlannedRow | null {
     })
   } catch (e) {
     fail(itemColumn(messageOf(e)), e)
+  }
+
+  // Taxonomy names: the same checks the find-or-create helpers make at apply time.
+  const taxonomy: [string, string | null, (name: string) => unknown][] = [
+    ['category', row.category, (name) => validateCategoryInput({ name, parentId: null })],
+    ['subcategory', row.subcategory, (name) => validateCategoryInput({ name, parentId: null })],
+    ['brand', row.brand, (name) => validateBrandInput({ name })],
+    ['group', row.group, (name) => validateGroupInput({ name, attributeKeys: [] })],
+  ]
+  for (const [column, name, check] of taxonomy) {
+    if (name === null) continue
+    try {
+      check(name)
+    } catch (e) {
+      fail(column, e)
+    }
   }
 
   let barcode: string | null = null

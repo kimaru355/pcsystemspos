@@ -181,6 +181,35 @@ describe('previewImport', () => {
     expect(p.itemCount).toBe(0)
   })
 
+  it('validates category, subcategory, brand and group names on the row line', async () => {
+    const { ctx } = await setup()
+    const long = 'x'.repeat(101)
+    const base = { base_unit: 'pc', price: '1' }
+    const text = csv([
+      { ...base, name: 'A', brand: long },
+      { ...base, name: 'B', category: long },
+      { ...base, name: 'C', category: 'Roofing', subcategory: long },
+      { ...base, name: 'D', group: long },
+    ])
+    const p = await previewImport(db, ctx, text)
+    expect(p.errors.map((e) => [e.line, e.column])).toEqual([
+      [2, 'brand'],
+      [3, 'category'],
+      [4, 'subcategory'],
+      [5, 'group'],
+    ])
+    expect(p.itemCount).toBe(0)
+    expect(p.newBrands).toEqual([])
+  })
+
+  it('apply refuses a too-long brand with its line number and writes nothing', async () => {
+    const { ctx } = await setup()
+    const before = await counts()
+    const text = csv([sheet, { name: 'B', base_unit: 'pc', price: '1', brand: 'x'.repeat(101) }])
+    await expectDomain(applyImport(db, ctx, text), 'invalid_input', /^Line 3: /)
+    expect(await counts()).toEqual(before)
+  })
+
   it('reports an unknown or other-business outlet code, and an unterminated quote', async () => {
     const a = await setup(['KTL'])
     await setup(['OTH'])
