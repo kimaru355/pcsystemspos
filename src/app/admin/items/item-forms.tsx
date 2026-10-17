@@ -57,7 +57,8 @@ export function ItemForm({
   categories: CategoryNode[]
   brands: BrandOption[]
 }) {
-  const { state, pending, formProps } = useKeptForm(item ? updateItemAction : createItemAction)
+  const f = useKeptForm(item ? updateItemAction : createItemAction)
+  const { state, pending } = f
   const [groupId, setGroupId] = useState(item?.groupId ?? '')
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? '')
   const [brandId, setBrandId] = useState(item?.brandId ?? '')
@@ -73,11 +74,11 @@ export function ItemForm({
   }
 
   return (
-    <form {...formProps} className="grid gap-x-4 gap-y-3 sm:grid-cols-2" noValidate>
+    <form key={f.nonce} action={f.action} className="grid gap-x-4 gap-y-3 sm:grid-cols-2" noValidate>
       {item && <input type="hidden" name="itemId" value={item.id} />}
 
       <Field id="item-name" label="Name" className="sm:col-span-2">
-        {(p) => <input {...p} name="name" required maxLength={200} defaultValue={item?.name ?? ''} />}
+        {(p) => <input {...p} name="name" required maxLength={200} defaultValue={f.text('name', item?.name ?? '')} />}
       </Field>
 
       <Field id="item-group" label="Group" hint="Groups add detail fields, like size or colour.">
@@ -96,7 +97,7 @@ export function ItemForm({
         {group?.attributeKeys.map((k) => (
           <Field key={`${group.id}:${k}`} id={`item-attr-${k}`} label={k.replace(/_/g, ' ')}>
             {(p) => (
-              <input {...p} name={`attr:${k}`} maxLength={50} defaultValue={item?.attributes[k] ?? ''} />
+              <input {...p} name={`attr:${k}`} maxLength={50} defaultValue={f.text(`attr:${k}`, item?.attributes[k] ?? '')} />
             )}
           </Field>
         ))}
@@ -123,12 +124,12 @@ export function ItemForm({
       </Field>
 
       <Field id="item-sku" label="SKU" hint="Your own code for the item. Optional.">
-        {(p) => <input {...p} name="sku" maxLength={64} defaultValue={item?.sku ?? ''} className={`${p.className} font-mono`} />}
+        {(p) => <input {...p} name="sku" maxLength={64} defaultValue={f.text('sku', item?.sku ?? '')} className={`${p.className} font-mono`} />}
       </Field>
       <Field id="item-unit" label="Base unit" hint="What one unit of stock is, like sheet, kg or metre.">
         {(p) => (
           <>
-            <input {...p} name="baseUnit" required maxLength={20} list="unit-suggestions" defaultValue={item?.baseUnit ?? ''} />
+            <input {...p} name="baseUnit" required maxLength={20} list="unit-suggestions" defaultValue={f.text('baseUnit', item?.baseUnit ?? '')} />
             <datalist id="unit-suggestions">
               {UNIT_SUGGESTIONS.map((u) => (
                 <option key={u} value={u} />
@@ -139,7 +140,7 @@ export function ItemForm({
       </Field>
 
       <label className="flex items-center gap-2 text-sm sm:col-span-2">
-        <input type="checkbox" name="fractional" defaultChecked={item?.fractional ?? false} />
+        <input type="checkbox" name="fractional" defaultChecked={f.checked('fractional', item?.fractional ?? false)} />
         Sold in fractions, like 2.5 metres
       </label>
 
@@ -151,7 +152,7 @@ export function ItemForm({
             inputMode="decimal"
             required
             placeholder="950 or 1,250.50"
-            defaultValue={item ? formatAmount(item.priceCents) : ''}
+            defaultValue={f.text('price', item ? formatAmount(item.priceCents) : '')}
             className={`${p.className} figures`}
           />
         )}
@@ -163,7 +164,7 @@ export function ItemForm({
             name="floor"
             inputMode="decimal"
             placeholder="Same as price"
-            defaultValue={item ? formatAmount(item.floorCents) : ''}
+            defaultValue={f.text('floor', item ? formatAmount(item.floorCents) : '')}
             className={`${p.className} figures`}
           />
         )}
@@ -171,7 +172,7 @@ export function ItemForm({
 
       <Field id="item-tax" label="Tax category">
         {(p) => (
-          <select {...p} name="taxCategory" defaultValue={item?.taxCategory ?? 'B'}>
+          <select {...p} name="taxCategory" defaultValue={f.text('taxCategory', item?.taxCategory ?? 'B')}>
             {TAX_CATEGORIES.map((c) => (
               <option key={c} value={c}>
                 {TAX_LABELS[c]}
@@ -187,7 +188,7 @@ export function ItemForm({
             name="lowStock"
             inputMode="decimal"
             placeholder="e.g. 10"
-            defaultValue={item?.lowStockMilli != null ? formatQty(item.lowStockMilli) : ''}
+            defaultValue={f.text('lowStock', item?.lowStockMilli != null ? formatQty(item.lowStockMilli) : '')}
             className={`${p.className} figures`}
           />
         )}
@@ -195,7 +196,7 @@ export function ItemForm({
 
       {item && (
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
-          <input type="checkbox" name="active" defaultChecked={item.active} />
+          <input type="checkbox" name="active" defaultChecked={f.checked('active', item.active)} />
           Active (inactive items stay in the catalog but are not sold)
         </label>
       )}

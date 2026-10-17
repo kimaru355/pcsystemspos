@@ -23,3 +23,20 @@ export function buildCategoryTree(
     .filter((c) => c.parentId === null && (visible(c) || (kids.get(c.id)?.length ?? 0) > 0))
     .map((c) => ({ id: c.id, name: c.name, active: c.active, children: kids.get(c.id) ?? [] }))
 }
+
+export type ParentOption = { id: string; name: string }
+
+/**
+ * Parent choices for a category: the active top-level categories, plus the category's current
+ * parent even when that one is inactive (marked), so saving without touching the select keeps
+ * the parent. `excludeId` leaves out the category itself.
+ */
+export function parentOptions(
+  tree: CategoryNode[],
+  currentParentId: string | null,
+  excludeId?: string,
+): ParentOption[] {
+  return tree
+    .filter((c) => c.id !== excludeId && (c.active || c.id === currentParentId))
+    .map((c) => ({ id: c.id, name: c.active ? c.name : `${c.name} (inactive)` }))
+}

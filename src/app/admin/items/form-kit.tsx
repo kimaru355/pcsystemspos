@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useRef, useTransition } from 'react'
+import { useActionState } from 'react'
 import { cn } from 'cn'
 import type { FormState } from './form-state'
 import { inputClass, labelClass } from './styles'
@@ -8,26 +8,32 @@ import { inputClass, labelClass } from './styles'
 export const initialState: FormState = { message: '' }
 
 /**
- * Like `<form action>`, but React does not wipe the typed values when the action returns, so a
- * rejected save keeps what the person typed. `resetOnOk` clears the form after a good save
- * (the add-a-row forms).
+ * State for a catalog form that is a real `<form action={action}>` (a POST to the server action,
+ * so it also works before hydration and never falls back to GET).
+ *
+ * React clears uncontrolled inputs when an action returns. To keep what was typed after a
+ * rejected save, the server action echoes the submitted values in `state.values`; fields render
+ * `text()` / `checked()` as their defaults, and the form is keyed on `nonce` so React applies those
+ * defaults again after its reset. A good save returns no values, so the form shows the saved data
+ * (or goes blank, for the add-a-row forms).
+ *
+ *   <form key={f.nonce} action={f.action}> ... defaultValue={f.text('name', saved)} ...
  */
 export function useKeptForm(
   action: (prev: FormState, formData: FormData) => Promise<FormState>,
-  { resetOnOk = false }: { resetOnOk?: boolean } = {},
 ) {
   const [state, dispatch, pending] = useActionState(action, initialState)
-  const [, startTransition] = useTransition()
-  const ref = useRef<HTMLFormElement>(null)
-  useEffect(() => {
-    if (resetOnOk && state.ok) ref.current?.reset()
-  }, [resetOnOk, state])
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const data = new FormData(e.currentTarget)
-    startTransition(() => dispatch(data))
+  const values = state.values
+  return {
+    state,
+    pending,
+    action: dispatch,
+    nonce: state.nonce,
+    /** The submitted value after a rejected save, otherwise `saved`. */
+    text: (name: string, saved = '') => values?.[name] ?? saved,
+    /** A checkbox: absent from the submitted values means unchecked. */
+    checked: (name: string, saved: boolean) => (values ? values[name] === 'on' : saved),
   }
-  return { state, pending, formProps: { ref, onSubmit } }
 }
 
 export function Message({ state, className }: { state: FormState; className?: string }) {

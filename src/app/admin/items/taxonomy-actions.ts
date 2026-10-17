@@ -11,7 +11,7 @@ import {
   updateGroup,
 } from '@/server/services/taxonomy'
 import { requireTenant } from '@/server/tenant'
-import { failure, type FormState } from './form-state'
+import { done, failure, type FormState } from './form-state'
 import { optionalId, text } from './parse'
 
 /** Comma-separated attribute names -> list; blanks are dropped, the service validates the rest. */
@@ -33,10 +33,10 @@ export async function createCategoryAction(_prev: FormState, formData: FormData)
   try {
     await createCategory(db, ctx, { name: text(formData, 'name'), parentId: optionalId(formData, 'parentId') })
   } catch (e) {
-    return failure(e, 'That parent category no longer exists.')
+    return failure(e, 'That parent category no longer exists.', formData)
   }
   revalidate('/admin/items/categories')
-  return { message: 'Category added.', ok: true }
+  return done('Category added.')
 }
 
 export async function updateCategoryAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -49,10 +49,10 @@ export async function updateCategoryAction(_prev: FormState, formData: FormData)
       active: formData.get('active') === 'on',
     })
   } catch (e) {
-    return failure(e, 'That category no longer exists.')
+    return failure(e, 'That category no longer exists.', formData)
   }
   revalidate('/admin/items/categories')
-  return { message: 'Saved.', ok: true }
+  return done('Saved.')
 }
 
 export async function createBrandAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -60,10 +60,10 @@ export async function createBrandAction(_prev: FormState, formData: FormData): P
   try {
     await createBrand(db, ctx, { name: text(formData, 'name') })
   } catch (e) {
-    return failure(e, 'That brand no longer exists.')
+    return failure(e, 'That brand no longer exists.', formData)
   }
   revalidate('/admin/items/brands')
-  return { message: 'Brand added.', ok: true }
+  return done('Brand added.')
 }
 
 export async function updateBrandAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -74,10 +74,10 @@ export async function updateBrandAction(_prev: FormState, formData: FormData): P
       active: formData.get('active') === 'on',
     })
   } catch (e) {
-    return failure(e, 'That brand no longer exists.')
+    return failure(e, 'That brand no longer exists.', formData)
   }
   revalidate('/admin/items/brands')
-  return { message: 'Saved.', ok: true }
+  return done('Saved.')
 }
 
 export async function createGroupAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -90,10 +90,10 @@ export async function createGroupAction(_prev: FormState, formData: FormData): P
       attributeKeys: keys(formData),
     })
   } catch (e) {
-    return failure(e, 'That category or brand no longer exists.')
+    return failure(e, 'That category or brand no longer exists.', formData)
   }
   revalidate('/admin/items/groups')
-  return { message: 'Group added.', ok: true }
+  return done('Group added.')
 }
 
 export async function updateGroupAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -107,8 +107,8 @@ export async function updateGroupAction(_prev: FormState, formData: FormData): P
       active: formData.get('active') === 'on',
     })
   } catch (e) {
-    return failure(e, 'That group, category or brand no longer exists.')
+    return failure(e, 'That group, category or brand no longer exists.', formData)
   }
   revalidate('/admin/items/groups')
-  return { message: 'Saved.', ok: true }
+  return done('Saved.')
 }

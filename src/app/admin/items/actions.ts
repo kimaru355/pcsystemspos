@@ -15,7 +15,7 @@ import {
   type ItemInput,
 } from '@/server/services/items'
 import { requireTenant } from '@/server/tenant'
-import { failure, type FormState } from './form-state'
+import { done, failure, type FormState } from './form-state'
 import { money, optionalId, optionalQty, qty, text } from './parse'
 
 const NOT_FOUND = 'That item no longer exists.'
@@ -57,7 +57,7 @@ export async function createItemAction(_prev: FormState, formData: FormData): Pr
   try {
     id = (await createItem(db, ctx, itemInput(formData))).id
   } catch (e) {
-    return failure(e, NOT_FOUND)
+    return failure(e, NOT_FOUND, formData)
   }
   revalidatePath('/admin/items')
   redirect(`/admin/items/${id}`)
@@ -69,11 +69,11 @@ export async function updateItemAction(_prev: FormState, formData: FormData): Pr
   try {
     await updateItem(db, ctx, id, { ...itemInput(formData), active: formData.get('active') === 'on' })
   } catch (e) {
-    return failure(e, NOT_FOUND)
+    return failure(e, NOT_FOUND, formData)
   }
   revalidatePath('/admin/items')
   revalidatePath(`/admin/items/${id}`)
-  return { message: 'Saved.', ok: true }
+  return done('Saved.')
 }
 
 function packFields(formData: FormData) {
@@ -92,10 +92,10 @@ export async function addPackAction(_prev: FormState, formData: FormData): Promi
   try {
     await addPack(db, ctx, itemId, packFields(formData))
   } catch (e) {
-    return failure(e, NOT_FOUND)
+    return failure(e, NOT_FOUND, formData)
   }
   revalidatePath(`/admin/items/${itemId}`)
-  return { message: 'Pack added.', ok: true }
+  return done('Pack added.')
 }
 
 export async function updatePackAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -106,11 +106,11 @@ export async function updatePackAction(_prev: FormState, formData: FormData): Pr
       active: formData.get('active') === 'on',
     })
   } catch (e) {
-    return failure(e, 'That pack no longer exists.')
+    return failure(e, 'That pack no longer exists.', formData)
   }
   revalidatePath(`/admin/items/${text(formData, 'itemId')}`)
   revalidatePath('/admin/items')
-  return { message: 'Saved.', ok: true }
+  return done('Saved.')
 }
 
 export async function addBarcodeAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -122,10 +122,10 @@ export async function addBarcodeAction(_prev: FormState, formData: FormData): Pr
       packId: optionalId(formData, 'packId'),
     })
   } catch (e) {
-    return failure(e, 'That item or pack no longer exists.')
+    return failure(e, 'That item or pack no longer exists.', formData)
   }
   revalidatePath(`/admin/items/${itemId}`)
-  return { message: 'Barcode added.', ok: true }
+  return done('Barcode added.')
 }
 
 export async function removeBarcodeAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -133,8 +133,8 @@ export async function removeBarcodeAction(_prev: FormState, formData: FormData):
   try {
     await removeBarcode(db, ctx, text(formData, 'barcodeId'))
   } catch (e) {
-    return failure(e, 'That barcode is already gone.')
+    return failure(e, 'That barcode is already gone.', formData)
   }
   revalidatePath(`/admin/items/${text(formData, 'itemId')}`)
-  return { message: 'Barcode removed.', ok: true }
+  return done('Barcode removed.')
 }

@@ -7,18 +7,19 @@ import { addBarcodeAction, removeBarcodeAction } from './actions'
 import { Field, Message, useKeptForm } from './form-kit'
 
 export function AddBarcodeForm({ item }: { item: Item }) {
-  const { state, pending, formProps } = useKeptForm(addBarcodeAction, { resetOnOk: true })
+  const f = useKeptForm(addBarcodeAction)
+  const { state, pending } = f
   const packs = item.packs.filter((p) => p.active)
   return (
-    <form {...formProps} className="flex flex-col gap-2 pt-3" noValidate>
+    <form key={f.nonce} action={f.action} className="flex flex-col gap-2 pt-3" noValidate>
       <input type="hidden" name="itemId" value={item.id} />
       <div className="grid gap-x-3 gap-y-2 sm:grid-cols-[minmax(0,1fr)_14rem_auto] sm:items-end">
         <Field id="new-barcode" label="Barcode" hint="Scan it or type it. Letters, digits, dots and dashes.">
-          {(p) => <input {...p} name="barcode" required maxLength={64} autoComplete="off" className={`${p.className} font-mono`} />}
+          {(p) => <input {...p} name="barcode" required maxLength={64} autoComplete="off" defaultValue={f.text('barcode')} className={`${p.className} font-mono`} />}
         </Field>
         <Field id="new-barcode-unit" label="Sells as">
           {(p) => (
-            <select {...p} name="packId" defaultValue="">
+            <select {...p} name="packId" defaultValue={f.text('packId')}>
               <option value="">Base unit ({item.baseUnit})</option>
               {packs.map((pk) => (
                 <option key={pk.id} value={pk.id}>
@@ -39,10 +40,11 @@ export function AddBarcodeForm({ item }: { item: Item }) {
 
 /** Remove needs a second press: a mapping is hard-deleted, not deactivated. */
 export function RemoveBarcodeForm({ itemId, barcodeId, code }: { itemId: string; barcodeId: string; code: string }) {
-  const { state, pending, formProps } = useKeptForm(removeBarcodeAction)
+  const f = useKeptForm(removeBarcodeAction)
+  const { state, pending } = f
   const [confirming, setConfirming] = useState(false)
   return (
-    <form {...formProps} className="flex flex-wrap items-center justify-end gap-2">
+    <form key={f.nonce} action={f.action} className="flex flex-wrap items-center justify-end gap-2">
       <input type="hidden" name="itemId" value={itemId} />
       <input type="hidden" name="barcodeId" value={barcodeId} />
       {!confirming ? (

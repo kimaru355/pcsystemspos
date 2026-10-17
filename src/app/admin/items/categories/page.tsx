@@ -5,7 +5,7 @@ import { db } from '@/db/client'
 import { can } from '@/domain/permissions'
 import { listCategories } from '@/server/services/taxonomy'
 import { requireTenant } from '@/server/tenant'
-import { buildCategoryTree } from '../category-tree'
+import { buildCategoryTree, parentOptions } from '../category-tree'
 import { ItemsNav } from '../items-nav'
 import { StatusBadge } from '../status-badge'
 import { CategoryRow, CreateCategoryForm } from '../taxonomy-forms'
@@ -28,8 +28,6 @@ async function CategoriesContent() {
   const categories = await listCategories(db, ctx)
   const byId = new Map(categories.map((c) => [c.id, c]))
   const tree = buildCategoryTree(categories, { includeInactive: true })
-  // Only top-level categories can be a parent.
-  const parents = tree.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))
 
   return (
     <div className="flex flex-col gap-10">
@@ -39,13 +37,13 @@ async function CategoriesContent() {
           {tree.map((c) => (
             <div key={c.id}>
               {canManage ? (
-                <CategoryRow category={byId.get(c.id)!} parents={parents} hasChildren={c.children.length > 0} depth={0} />
+                <CategoryRow category={byId.get(c.id)!} parents={parentOptions(tree, null, c.id)} hasChildren={c.children.length > 0} depth={0} />
               ) : (
                 <ReadOnlyLine name={c.name} active={c.active} depth={0} />
               )}
               {c.children.map((k) =>
                 canManage ? (
-                  <CategoryRow key={k.id} category={byId.get(k.id)!} parents={parents} hasChildren={false} depth={1} />
+                  <CategoryRow key={k.id} category={byId.get(k.id)!} parents={parentOptions(tree, c.id, k.id)} hasChildren={false} depth={1} />
                 ) : (
                   <ReadOnlyLine key={k.id} name={k.name} active={k.active} depth={1} />
                 ),
@@ -57,7 +55,7 @@ async function CategoriesContent() {
 
       {canManage && (
         <Region id="add-category-heading" title="Add a category">
-          <CreateCategoryForm parents={parents} />
+          <CreateCategoryForm parents={parentOptions(tree, null)} />
         </Region>
       )}
     </div>
