@@ -61,3 +61,49 @@ depends on it. Read this when writing the next phase's plan.
 - Shared password/email validation constants (duplicated in three services).
 - Outlet name max length; phone normaliser accepts `+07…`; `parseMoney("0,500")`.
 - E2E: locate rows by role/test id rather than Tailwind classes.
+
+---
+
+# Phase 2 — Follow-ups (from the catalog and inventory reviews)
+
+## Before Phase 3 (till pull and sync)
+
+- **Catalog pull cursor:** `brands` and `item_packs` have no `updated_at`,
+  `item_barcodes` rows are hard-deleted with no tombstone, and `outlet_stock`
+  has no version column. Decide between a change sequence/tombstones and a full
+  catalog pull, then add it in a new migration (additive).
+- `NewMovement` needs `deviceId`. Movement ids are already client-suppliable.
+- Enforce the ledger as append-only in the DB (REVOKE UPDATE/DELETE or a
+  trigger) before sync writes start.
+- Composite `(id, business_id)` FKs for `outlet_stock`, `stock_movements`,
+  `item_packs`, `item_barcodes` (today cross-business integrity is
+  service-only).
+- Indexes on `items(category_id|brand_id|group_id)`, `item_barcodes(item_id)`,
+  `outlet_stock(item_id)`.
+- Activity feed index is `NULLS LAST` while the query sorts `NULLS FIRST`, so
+  align them. Add a partial index for the import file-hash lookup.
+- **Framework:** a server-action form posted before hydration (no JS) returns a
+  blank page under `cacheComponents` (affects all admin forms). Check Next
+  patch releases or add a no-JS fallback.
+- `serverActions.bodySizeLimit` is 3 MB app-wide, which affects pre-auth
+  actions like login. Move the import upload to an authenticated route handler.
+
+## Before Phase 4 (orders)
+
+- Callers touching several items in one transaction must lock items in a stable
+  order (sorted by id) to avoid deadlocks. Callers must validate the outlet
+  before `applyMovement`.
+- Pack → base-unit conversion needs a rounding rule.
+- FK and partial unique index on `stock_movements.order_line_id` for collects.
+- `lowStockCounts` is N+1. Push it into SQL once owed is a real query.
+- `vatRateBp` has no runtime guard. Validate tax categories at every boundary.
+
+## Polish
+
+- Managers see no catalog or stock lines in the activity feed.
+- The import silently reuses deactivated categories, brands and groups.
+- An inactive top-level category with active children is still selectable.
+- Some tests read `audit_log` with an unordered `limit(1)`. Order them by `seq`.
+- The overview "Add items and prices" step is never marked done.
+- Small accessibility items: no `aria-live` announcement after a form remounts,
+  `aria-controls` pointing at closed panels, no live region while importing.
