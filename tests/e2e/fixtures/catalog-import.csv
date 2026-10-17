@@ -1,0 +1,3 @@
+name,group,category,subcategory,brand,sku,barcode,base_unit,fractional,price,floor,tax_category,low_stock,pack1_name,pack1_qty,pack1_price,pack1_floor,pack1_barcode,pack2_name,pack2_qty,pack2_price,pack2_floor,pack2_barcode,stock_KTL
+Cement 50kg,,Building,,,CEM-50,6009876543210,bag,no,780,750,B,5,Box,10,"7,500","7,300",,,,,,,12
+Wire nails 4in,,Building,,,NAIL-4,,kg,yes,180,,B,,,,,,,,,,,,
