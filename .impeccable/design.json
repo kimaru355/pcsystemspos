@@ -1,0 +1,505 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-17T01:56:49.790087+00:00",
+  "title": "Design System: PC Systems POS",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Daylight Ground",
+        "canonical": "oklch(0.972 0.003 150)",
+        "tonalRamp": [
+          "oklch(0.15 0.003 150)",
+          "oklch(0.26 0.003 150)",
+          "oklch(0.37 0.003 150)",
+          "oklch(0.48 0.003 150)",
+          "oklch(0.60 0.003 150)",
+          "oklch(0.72 0.003 150)",
+          "oklch(0.84 0.003 150)",
+          "oklch(0.95 0.003 150)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Counter White",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": [
+          "oklch(0.15 0.000 0)",
+          "oklch(0.26 0.000 0)",
+          "oklch(0.37 0.000 0)",
+          "oklch(0.48 0.000 0)",
+          "oklch(0.60 0.000 0)",
+          "oklch(0.72 0.000 0)",
+          "oklch(0.84 0.000 0)",
+          "oklch(0.95 0.000 0)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Receipt Ink",
+        "canonical": "oklch(0.19 0.006 250)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 250)",
+          "oklch(0.26 0.006 250)",
+          "oklch(0.37 0.006 250)",
+          "oklch(0.48 0.006 250)",
+          "oklch(0.60 0.006 250)",
+          "oklch(0.72 0.006 250)",
+          "oklch(0.84 0.006 250)",
+          "oklch(0.95 0.006 250)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Pale Wash",
+        "canonical": "oklch(0.945 0.004 150)",
+        "tonalRamp": [
+          "oklch(0.15 0.004 150)",
+          "oklch(0.26 0.004 150)",
+          "oklch(0.37 0.004 150)",
+          "oklch(0.48 0.004 150)",
+          "oklch(0.60 0.004 150)",
+          "oklch(0.72 0.004 150)",
+          "oklch(0.84 0.004 150)",
+          "oklch(0.95 0.004 150)"
+        ]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "oklch(0.47 0.012 250)",
+        "tonalRamp": [
+          "oklch(0.15 0.012 250)",
+          "oklch(0.26 0.012 250)",
+          "oklch(0.37 0.012 250)",
+          "oklch(0.48 0.012 250)",
+          "oklch(0.60 0.012 250)",
+          "oklch(0.72 0.012 250)",
+          "oklch(0.84 0.012 250)",
+          "oklch(0.95 0.012 250)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.885 0.006 150)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 150)",
+          "oklch(0.26 0.006 150)",
+          "oklch(0.37 0.006 150)",
+          "oklch(0.48 0.006 150)",
+          "oklch(0.60 0.006 150)",
+          "oklch(0.72 0.006 150)",
+          "oklch(0.84 0.006 150)",
+          "oklch(0.95 0.006 150)"
+        ]
+      },
+      "input": {
+        "role": "neutral",
+        "displayName": "Field Edge",
+        "canonical": "oklch(0.8 0.008 150)",
+        "tonalRamp": [
+          "oklch(0.15 0.008 150)",
+          "oklch(0.26 0.008 150)",
+          "oklch(0.37 0.008 150)",
+          "oklch(0.48 0.008 150)",
+          "oklch(0.60 0.008 150)",
+          "oklch(0.72 0.008 150)",
+          "oklch(0.84 0.008 150)",
+          "oklch(0.95 0.008 150)"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Counter Blue",
+        "canonical": "oklch(0.47 0.19 262)",
+        "tonalRamp": [
+          "oklch(0.15 0.124 262)",
+          "oklch(0.26 0.153 262)",
+          "oklch(0.37 0.182 262)",
+          "oklch(0.48 0.190 262)",
+          "oklch(0.60 0.190 262)",
+          "oklch(0.72 0.185 262)",
+          "oklch(0.84 0.153 262)",
+          "oklch(0.95 0.124 262)"
+        ]
+      },
+      "primary-foreground": {
+        "role": "neutral",
+        "displayName": "Counter Blue Ink",
+        "canonical": "oklch(0.99 0 0)",
+        "tonalRamp": [
+          "oklch(0.15 0.000 0)",
+          "oklch(0.26 0.000 0)",
+          "oklch(0.37 0.000 0)",
+          "oklch(0.48 0.000 0)",
+          "oklch(0.60 0.000 0)",
+          "oklch(0.72 0.000 0)",
+          "oklch(0.84 0.000 0)",
+          "oklch(0.95 0.000 0)"
+        ]
+      },
+      "rail": {
+        "role": "secondary",
+        "displayName": "Night Rail",
+        "canonical": "oklch(0.245 0.03 250)",
+        "tonalRamp": [
+          "oklch(0.15 0.030 250)",
+          "oklch(0.26 0.030 250)",
+          "oklch(0.37 0.030 250)",
+          "oklch(0.48 0.030 250)",
+          "oklch(0.60 0.030 250)",
+          "oklch(0.72 0.030 250)",
+          "oklch(0.84 0.030 250)",
+          "oklch(0.95 0.030 250)"
+        ]
+      },
+      "rail-raised": {
+        "role": "secondary",
+        "displayName": "Rail Raised",
+        "canonical": "oklch(0.31 0.035 250)",
+        "tonalRamp": [
+          "oklch(0.15 0.035 250)",
+          "oklch(0.26 0.035 250)",
+          "oklch(0.37 0.035 250)",
+          "oklch(0.48 0.035 250)",
+          "oklch(0.60 0.035 250)",
+          "oklch(0.72 0.035 250)",
+          "oklch(0.84 0.035 250)",
+          "oklch(0.95 0.035 250)"
+        ]
+      },
+      "rail-ink": {
+        "role": "secondary",
+        "displayName": "Rail Ink",
+        "canonical": "oklch(0.975 0.005 250)",
+        "tonalRamp": [
+          "oklch(0.15 0.005 250)",
+          "oklch(0.26 0.005 250)",
+          "oklch(0.37 0.005 250)",
+          "oklch(0.48 0.005 250)",
+          "oklch(0.60 0.005 250)",
+          "oklch(0.72 0.005 250)",
+          "oklch(0.84 0.005 250)",
+          "oklch(0.95 0.005 250)"
+        ]
+      },
+      "rail-muted": {
+        "role": "secondary",
+        "displayName": "Rail Muted",
+        "canonical": "oklch(0.76 0.025 250)",
+        "tonalRamp": [
+          "oklch(0.15 0.025 250)",
+          "oklch(0.26 0.025 250)",
+          "oklch(0.37 0.025 250)",
+          "oklch(0.48 0.025 250)",
+          "oklch(0.60 0.025 250)",
+          "oklch(0.72 0.025 250)",
+          "oklch(0.84 0.025 250)",
+          "oklch(0.95 0.025 250)"
+        ]
+      },
+      "rail-ring": {
+        "role": "secondary",
+        "displayName": "Rail Ring",
+        "canonical": "oklch(0.72 0.12 262)",
+        "tonalRamp": [
+          "oklch(0.15 0.093 262)",
+          "oklch(0.26 0.111 262)",
+          "oklch(0.37 0.120 262)",
+          "oklch(0.48 0.120 262)",
+          "oklch(0.60 0.120 262)",
+          "oklch(0.72 0.120 262)",
+          "oklch(0.84 0.111 262)",
+          "oklch(0.95 0.093 262)"
+        ]
+      },
+      "paid": {
+        "role": "tertiary",
+        "displayName": "Paid Green",
+        "canonical": "oklch(0.53 0.13 152)",
+        "tonalRamp": [
+          "oklch(0.15 0.097 152)",
+          "oklch(0.26 0.117 152)",
+          "oklch(0.37 0.130 152)",
+          "oklch(0.48 0.130 152)",
+          "oklch(0.60 0.130 152)",
+          "oklch(0.72 0.130 152)",
+          "oklch(0.84 0.117 152)",
+          "oklch(0.95 0.097 152)"
+        ]
+      },
+      "owed-ink": {
+        "role": "tertiary",
+        "displayName": "Owed Amber Ink",
+        "canonical": "oklch(0.5 0.12 58)",
+        "tonalRamp": [
+          "oklch(0.15 0.093 58)",
+          "oklch(0.26 0.111 58)",
+          "oklch(0.37 0.120 58)",
+          "oklch(0.48 0.120 58)",
+          "oklch(0.60 0.120 58)",
+          "oklch(0.72 0.120 58)",
+          "oklch(0.84 0.111 58)",
+          "oklch(0.95 0.093 58)"
+        ]
+      },
+      "credit": {
+        "role": "tertiary",
+        "displayName": "Credit Red",
+        "canonical": "oklch(0.53 0.19 28)",
+        "tonalRamp": [
+          "oklch(0.15 0.124 28)",
+          "oklch(0.26 0.153 28)",
+          "oklch(0.37 0.182 28)",
+          "oklch(0.48 0.190 28)",
+          "oklch(0.60 0.190 28)",
+          "oklch(0.72 0.185 28)",
+          "oklch(0.84 0.153 28)",
+          "oklch(0.95 0.124 28)"
+        ]
+      },
+      "destructive": {
+        "role": "neutral",
+        "displayName": "Error Red",
+        "canonical": "oklch(0.53 0.19 28)",
+        "tonalRamp": [
+          "oklch(0.15 0.124 28)",
+          "oklch(0.26 0.153 28)",
+          "oklch(0.37 0.182 28)",
+          "oklch(0.48 0.190 28)",
+          "oklch(0.60 0.190 28)",
+          "oklch(0.72 0.185 28)",
+          "oklch(0.84 0.153 28)",
+          "oklch(0.95 0.124 28)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles and the till order total."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Large admin region headings."
+      },
+      "title-sm": {
+        "displayName": "Title Small",
+        "purpose": "Small region headings, order and sheet titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default admin text, nav items, confirmation lines, tables."
+      },
+      "body-touch": {
+        "displayName": "Body Touch",
+        "purpose": "Phone inputs and the till scan field (no zoom on Android)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Meta, timestamps, settlement labels and amounts, phone tab labels."
+      },
+      "nav-group": {
+        "displayName": "Nav Group",
+        "purpose": "Uppercase group labels inside the rail nav only."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Martian Mono at wdth 75: order numbers, outlet, item and device codes."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sheet-edge",
+        "value": "8px 0 32px -8px rgb(0 0 0 / 0.35)",
+        "purpose": "Mobile nav sheet sliding from the left."
+      },
+      {
+        "name": "bottom-sheet-lift",
+        "value": "0 -12px 40px -12px rgb(0 0 0 / 0.35)",
+        "purpose": "Phone order sheet rising from the bottom."
+      },
+      {
+        "name": "selected-tile-underline",
+        "value": "0 1px 0 0 var(--foreground)",
+        "purpose": "One-pixel ink underline on an item tile already in the order; a rule, not a lift."
+      }
+    ],
+    "motion": [
+      {
+        "name": "sheet-slide",
+        "value": "transform 200ms ease-out",
+        "purpose": "Nav sheet and order sheet enter and exit."
+      },
+      {
+        "name": "backdrop-fade",
+        "value": "opacity 150ms",
+        "purpose": "Rail-tinted backdrop (rail at 50%) behind sheets."
+      },
+      {
+        "name": "tile-response",
+        "value": "border-color, box-shadow 150ms",
+        "purpose": "Item tile hover and selection."
+      },
+      {
+        "name": "press-nudge",
+        "value": "translateY(1px)",
+        "purpose": "Active press on buttons and tiles."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Counter Blue fill; the only filled colour on pressable things.",
+      "html": "<button class=\"ds-btn-primary\">Log in</button>",
+      "css": ".ds-btn-primary { font-family: var(--font-ui), Roboto, system-ui, sans-serif; display:inline-flex; align-items:center; height:32px; padding:0 10px; border:1px solid transparent; border-radius:6px; background: var(--primary, oklch(0.47 0.19 262)); color: var(--primary-foreground, oklch(0.99 0 0)); font-size:14px; font-weight:500; cursor:pointer; transition: all .15s; } .ds-btn-primary:hover { background: color-mix(in oklch, oklch(0.47 0.19 262) 80%, transparent); } .ds-btn-primary:focus-visible { outline:none; border-color: oklch(0.47 0.19 262); box-shadow: 0 0 0 3px oklch(0.47 0.19 262 / 0.5); } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary actions such as Collect.",
+      "html": "<button class=\"ds-btn-outline\">Collect</button>",
+      "css": ".ds-btn-outline { font-family: var(--font-ui), Roboto, system-ui, sans-serif; display:inline-flex; align-items:center; height:32px; padding:0 10px; border:1px solid oklch(0.885 0.006 150); border-radius:6px; background: oklch(0.972 0.003 150); color: oklch(0.19 0.006 250); font-size:14px; font-weight:500; cursor:pointer; } .ds-btn-outline:hover { background: oklch(0.945 0.004 150); } .ds-btn-outline:focus-visible { outline:none; border-color: oklch(0.47 0.19 262); box-shadow: 0 0 0 3px oklch(0.47 0.19 262 / 0.5); }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "White field, Field Edge border, 44px on phones.",
+      "html": "<input class=\"ds-input\" placeholder=\"Phone or email\" />",
+      "css": ".ds-input { font-family: var(--font-ui), Roboto, system-ui, sans-serif; height:44px; width:280px; padding:0 12px; border:1px solid oklch(0.8 0.008 150); border-radius:4.8px; background:#fff; color: oklch(0.19 0.006 250); font-size:16px; } .ds-input:focus-visible { outline:none; border-color: oklch(0.47 0.19 262); box-shadow: 0 0 0 3px oklch(0.47 0.19 262 / 0.3); }"
+    },
+    {
+      "name": "Rail Navigation",
+      "kind": "nav",
+      "refersTo": "rail-nav-item",
+      "description": "Night rail with grouped items; active item on rail-raised.",
+      "html": "<nav class=\"ds-rail\"><div class=\"ds-rail-group\">Business</div><a class=\"ds-rail-item ds-active\" href=\"#\">Overview</a><a class=\"ds-rail-item\" href=\"#\">Outlets</a><a class=\"ds-rail-item\" href=\"#\">Staff</a><span class=\"ds-rail-item ds-soon\">Orders<small>Soon</small></span></nav>",
+      "css": ".ds-rail { font-family: var(--font-ui), Roboto, system-ui, sans-serif; display:flex; flex-direction:column; gap:2px; width:216px; padding:16px 12px; background: oklch(0.245 0.03 250); } .ds-rail-group { padding:0 12px 4px; font-size:11.2px; font-weight:500; letter-spacing:.025em; text-transform:uppercase; color: oklch(0.76 0.025 250); } .ds-rail-item { display:flex; align-items:center; height:36px; padding:0 12px; border-radius:4.8px; font-size:14px; color: oklch(0.76 0.025 250); text-decoration:none; transition: background .15s, color .15s; } .ds-rail-item:hover { background: oklch(0.31 0.035 250 / 0.6); color: oklch(0.975 0.005 250); } .ds-rail-item:focus-visible { outline:none; box-shadow: 0 0 0 2px oklch(0.72 0.12 262); } .ds-active { background: oklch(0.31 0.035 250); color: oklch(0.975 0.005 250); font-weight:500; } .ds-soon { color: oklch(0.76 0.025 250 / 0.7); } .ds-soon small { margin-left:auto; font-size:11.2px; }"
+    },
+    {
+      "name": "Confirmation Line",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Signature: code first, past-tense status, who, new balance last, time at the end.",
+      "html": "<ol class=\"ds-thread\"><li class=\"ds-line\"><span class=\"ds-code\">KTL-03-000124</span><p><b class=\"ds-owed\">Collected.</b> 12 sheets of 12. <span class=\"ds-muted\">By Jane.</span> <span class=\"ds-bal\">KES 7,120.00 owed</span></p><time class=\"ds-time\">10:47</time></li><li class=\"ds-line\"><span class=\"ds-code\">KTL-03-000123</span><p><b class=\"ds-paid\">Paid.</b> KES 15,000.00 cash. <span class=\"ds-muted\">By Peter.</span> <span class=\"ds-bal\">Nothing owed</span></p><time class=\"ds-time\">10:31</time></li></ol>",
+      "css": ".ds-thread { font-family: var(--font-ui), Roboto, system-ui, sans-serif; list-style:none; margin:0; padding:0; width:560px; color: oklch(0.19 0.006 250); } .ds-line { display:grid; grid-template-columns:auto 1fr auto; align-items:baseline; column-gap:12px; padding:10px 0; font-size:14px; border-bottom:1px solid oklch(0.885 0.006 150); } .ds-line p { margin:0; } .ds-code { font-family: var(--font-code), \"Martian Mono\", ui-monospace, monospace; font-variation-settings: \"wdth\" 75; font-stretch: 75%; letter-spacing: -0.01em; font-size:12.8px; font-weight:500; } .ds-paid { color: oklch(0.53 0.13 152); font-weight:600; } .ds-owed { color: oklch(0.5 0.12 58); font-weight:600; } .ds-muted { color: oklch(0.47 0.012 250); } .ds-bal { font-weight:500; } .ds-time { font-size:12px; color: oklch(0.47 0.012 250); font-variant-numeric: tabular-nums; white-space:nowrap; }"
+    },
+    {
+      "name": "Settlement Bar",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Signature: money and goods on one measure against the order total.",
+      "html": "<div class=\"ds-settle\"><span class=\"ds-tl\">Money</span><div class=\"ds-track\"><i style=\"width:68%;background:oklch(0.53 0.13 152)\"></i></div><span></span><div class=\"ds-figs\"><span><span class=\"ds-m\">Paid </span><b style=\"color:oklch(0.53 0.13 152)\">KES 15,000.00</b></span><span><span class=\"ds-m\">Owed </span><b style=\"color:oklch(0.5 0.12 58)\">KES 7,120.00</b></span></div><span class=\"ds-tl\">Goods</span><div class=\"ds-track\"><i style=\"width:58%;background:oklch(0.19 0.006 250)\"></i></div><span></span><div class=\"ds-figs\"><span><span class=\"ds-m\">Collected </span><b>KES 12,920.00</b></span><span><span class=\"ds-m\">To collect </span><b>KES 9,200.00</b></span></div></div>",
+      "css": ".ds-settle { font-family: var(--font-ui), Roboto, system-ui, sans-serif; display:grid; grid-template-columns:3.75rem 1fr; align-items:center; gap:4px 12px; width:400px; color: oklch(0.19 0.006 250); } .ds-tl { font-size:12px; font-weight:500; color: oklch(0.47 0.012 250); } .ds-track { position:relative; height:10px; overflow:hidden; border-radius:3.6px; background: oklch(0.945 0.004 150); } .ds-track i { position:absolute; inset:0 auto 0 0; } .ds-figs { display:flex; justify-content:space-between; font-size:12px; font-variant-numeric: tabular-nums; margin-bottom:6px; } .ds-figs b { font-weight:600; } .ds-m { color: oklch(0.47 0.012 250); }"
+    },
+    {
+      "name": "Item Tile",
+      "kind": "card",
+      "refersTo": "item-tile",
+      "description": "Till grid tile: code, name, price, availability; inked when in the order.",
+      "html": "<button class=\"ds-tile ds-in\"><span class=\"ds-tcode\">IS30</span><span class=\"ds-tname\">Iron sheet 30 gauge 3 m</span><span class=\"ds-tfoot\"><b>1,150.00</b><span class=\"ds-low\">18 sheets left</span></span><span class=\"ds-qty\">&times;12</span></button>",
+      "css": ".ds-tile { font-family: var(--font-ui), Roboto, system-ui, sans-serif; position:relative; display:flex; flex-direction:column; gap:4px; width:160px; min-height:108px; padding:10px; text-align:left; border:1px solid oklch(0.885 0.006 150); border-radius:4.8px; background:#fff; color: oklch(0.19 0.006 250); cursor:pointer; transition: border-color .15s, box-shadow .15s; } .ds-tile:hover { border-color: oklch(0.19 0.006 250 / 0.4); } .ds-tile:focus-visible { outline:none; border-color: oklch(0.47 0.19 262); box-shadow: 0 0 0 3px oklch(0.47 0.19 262 / 0.3); } .ds-tile:active { transform: translateY(1px); } .ds-in { border-color: oklch(0.19 0.006 250 / 0.5); box-shadow: 0 1px 0 0 oklch(0.19 0.006 250); } .ds-tcode { font-family: var(--font-code), \"Martian Mono\", ui-monospace, monospace; font-variation-settings: \"wdth\" 75; font-stretch: 75%; letter-spacing: -0.01em; font-size:11.2px; font-weight:500; color: oklch(0.47 0.012 250); } .ds-tname { font-size:14px; font-weight:500; line-height:1.375; } .ds-tfoot { margin-top:auto; display:flex; justify-content:space-between; align-items:baseline; font-variant-numeric: tabular-nums; font-size:14px; } .ds-low { font-size:11.2px; color: oklch(0.5 0.12 58); } .ds-qty { position:absolute; top:8px; right:8px; padding:1px 6px; border-radius:3.6px; background: oklch(0.19 0.006 250); color: oklch(0.972 0.003 150); font-size:11.2px; font-weight:600; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Till Status Strip",
+      "kind": "custom",
+      "refersTo": "status-strip",
+      "description": "48px rail strip: outlet code chip, outlet, cashier, connection, quiet actions.",
+      "html": "<header class=\"ds-strip\"><span class=\"ds-chip\">KTL</span><b>Kitale</b><span class=\"ds-sep\"></span><span class=\"ds-q\">Olivia Owner</span><span class=\"ds-q\">Online</span><a class=\"ds-quiet\" href=\"#\">Log out</a></header>",
+      "css": ".ds-strip { font-family: var(--font-ui), Roboto, system-ui, sans-serif; display:flex; align-items:center; gap:12px; height:48px; padding:0 16px; width:640px; background: oklch(0.245 0.03 250); color: oklch(0.975 0.005 250); font-size:14px; } .ds-chip { font-family: var(--font-code), \"Martian Mono\", ui-monospace, monospace; font-variation-settings: \"wdth\" 75; font-stretch: 75%; letter-spacing: -0.01em; padding:2px 6px; border-radius:3.6px; background: oklch(0.31 0.035 250); font-size:12px; font-weight:500; } .ds-sep { width:1px; height:16px; background: oklch(1 0 0 / 0.1); } .ds-q { color: oklch(0.76 0.025 250); font-size:12px; } .ds-quiet { margin-left:auto; display:inline-flex; align-items:center; height:36px; padding:0 10px; border-radius:4.8px; color: oklch(0.76 0.025 250); text-decoration:none; } .ds-quiet:hover { background: oklch(0.31 0.035 250); color: oklch(0.975 0.005 250); } .ds-quiet:focus-visible { outline:none; box-shadow: 0 0 0 2px oklch(0.72 0.12 262); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Confirmation Thread",
+    "overview": "Every sale, payment, collection and setup change lands as one line, code first and the new balance last, in the grammar of the transaction SMS that Kenyan shop staff read every day. The system is a daylit counter tool: a near-white ground, ink-black text, and one dark night-blue rail that frames the work the way a message app frames a conversation. Nothing is boxed for decoration. Regions are separated by one-pixel rules and headings, and the screen is owned by one region at a time: the item grid and open order on the till, the activity thread on the admin overview.\n\nDensity is deliberate. The admin area is dense and scannable (14px body, 36px rows, tabular figures at full contrast); the till is thumb-sized (40-48px targets, a 44px scan field, a 48px Pay button under the thumb on phones). Colour has jobs and nothing else: the rail frames, the one blue marks what can be pressed, and green, amber and red speak only about money and goods. Every other state (online, offline, active, suspended, sample data, done, to do) is told in neutral ink and words.\n\nThe face is Roboto, the face Android phones already set their SMS confirmations in. Codes (order numbers, outlet and device codes, item codes) are set in Martian Mono at its narrowest width so a code like `KTL-03-000124` reads as one token. Light theme only; there is no dark mode and none is planned.",
+    "keyCharacteristics": [
+      "Near-white cool-green ground with white working surfaces; a single night-blue rail (admin sidebar, till status strip, auth panel).",
+      "One action colour, a deep blue, used only on pressable things.",
+      "Three state colours (paid green, owed amber, credit red) used only for money and goods.",
+      "Code-first one-line confirmations with the new balance last.",
+      "One-pixel rules instead of cards; tabular figures everywhere money or quantity appears.",
+      "Roboto for everything; Martian Mono at width 75 for codes only."
+    ],
+    "rules": [
+      {
+        "name": "The Pressable Blue Rule",
+        "body": "Counter Blue appears only on something that can be pressed, tabbed to or followed. Never on a heading, a figure, an icon at rest, a badge or a chart.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three States Rule",
+        "body": "Paid, owed and credit are the only state colours, and they describe money and goods. Every other state (online, offline, active, suspended, done, sample data) is told in neutral ink and words, or in an inverted ink badge.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Dark Region Rule",
+        "body": "The rail is the only dark region on any screen. Work never sits on it; it frames, scopes and signs out.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Inks Rule",
+        "body": "A region uses at most three ink values: foreground, muted foreground, and one state or action colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Code-First Rule",
+        "body": "Anything a person reads aloud to find a record (order number, outlet code, item code, device code) is set in the code face and leads its line. Prose, names and money never use the mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Column Figures Rule",
+        "body": "Money and quantities always use tabular numerals (`.figures`, and every table) at full contrast in semibold where they are the point of the line.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Region Rule",
+        "body": "Each screen is owned by one region: the grid and open order on the till, the activity thread on the overview. Supporting regions sit beside it and never compete in size or colour.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Counter Rule",
+        "body": "Nothing at rest casts a shadow. Only sheets and overlays that move over the page get one.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do lead every money, goods or setup event with its code in the mono face and end it with the new balance.",
+      "Do reserve Counter Blue for things that can be pressed: buttons, active tabs, links, focus.",
+      "Do use paid green, owed amber ink and credit red only for money and goods, and say every other state in neutral ink and words.",
+      "Do separate regions with one-pixel rules and headings rather than cards.",
+      "Do set every amount and quantity in tabular figures at full contrast.",
+      "Do keep till touch targets at 40px or more and put the total and Pay within thumb reach on phones.",
+      "Do treat offline as a normal state: an icon and the word \"Offline\" in the strip's muted ink, never a red alarm."
+    ],
+    "donts": [
+      "Don't add a second dark region or put work on the rail.",
+      "Don't use Counter Blue for headings, figures, icons at rest or decoration.",
+      "Don't colour non-money states (online, active, suspended, done) green, amber or red.",
+      "Don't wrap admin regions in cards or stack KPI cards over tables.",
+      "Don't use Safaricom's green, logo or wording anywhere.",
+      "Don't set prose, names or money in the code face, or codes in Roboto.",
+      "Don't add a dark theme; tills sit at daylit counters.",
+      "Don't give resting surfaces a shadow."
+    ]
+  }
+}

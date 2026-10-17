@@ -6,12 +6,12 @@ import { changePasswordAction, type ChangePasswordState } from './actions'
 
 const initialState: ChangePasswordState = { message: '' }
 const inputClass =
-  'h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-11 w-full rounded-md border border-input bg-surface px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 md:h-10 md:text-sm'
 
 export function ChangePasswordForm() {
   const [state, formAction, pending] = useActionState(changePasswordAction, initialState)
   return (
-    <form action={formAction} className="flex w-full max-w-sm flex-col gap-4">
+    <form action={formAction} className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="current" className="text-sm font-medium">
           Current password
@@ -56,7 +56,7 @@ export function ChangePasswordForm() {
       <p aria-live="polite" className="min-h-5 text-sm text-destructive">
         {state.message}
       </p>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" size="lg" className="h-11 text-base md:h-10 md:text-sm" disabled={pending}>
         {pending ? 'Saving…' : 'Change password'}
       </Button>
     </form>

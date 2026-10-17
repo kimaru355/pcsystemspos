@@ -72,5 +72,5 @@ test('owner sets up an outlet and a cashier, who then reaches the till', async (
   await logIn(page, CASHIER_PHONE, CASHIER_TEMP_PASSWORD)
   await changePassword(page, CASHIER_TEMP_PASSWORD, CASHIER_NEW_PASSWORD)
   await expect(page).toHaveURL(/\/till$/)
-  await expect(page.getByText('The till arrives in Phase 3.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'No items yet' })).toBeVisible()
 })

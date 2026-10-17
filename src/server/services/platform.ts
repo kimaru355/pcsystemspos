@@ -1,5 +1,6 @@
+import { asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { businesses, memberships, users } from '@/db/schema'
+import { businesses, memberships, outlets, users } from '@/db/schema'
 import { normalizeKePhone } from '@/domain/phone'
 import { hashSecret } from '@/server/auth/secret'
 import { isUniqueViolation } from '@/server/db-errors'
@@ -89,4 +90,31 @@ export async function createBusinessWithOwner(
     }
     throw e
   }
+}
+
+export type BusinessSummary = {
+  id: string
+  name: string
+  status: 'active' | 'suspended'
+  outlets: number
+  staff: number
+  createdAt: Date
+}
+
+/** Platform admins only (callers check). Counts, never a business's sales data. */
+export async function listBusinesses(db: Db): Promise<BusinessSummary[]> {
+  return db
+    .select({
+      id: businesses.id,
+      name: businesses.name,
+      status: businesses.status,
+      createdAt: businesses.createdAt,
+      outlets: sql<number>`count(distinct ${outlets.id}) filter (where ${outlets.active})::int`,
+      staff: sql<number>`count(distinct ${memberships.id}) filter (where ${memberships.active})::int`,
+    })
+    .from(businesses)
+    .leftJoin(outlets, eq(outlets.businessId, businesses.id))
+    .leftJoin(memberships, eq(memberships.businessId, businesses.id))
+    .groupBy(businesses.id)
+    .orderBy(asc(businesses.name))
 }

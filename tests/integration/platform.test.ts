@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/client'
-import { businesses, memberships, users } from '@/db/schema'
+import { businesses, memberships, outlets, users } from '@/db/schema'
 import { login } from '@/server/auth/login'
 import { DomainError } from '@/server/errors'
-import { createBusinessWithOwner, createPlatformAdmin } from '@/server/services/platform'
+import { createBusinessWithOwner, createPlatformAdmin, listBusinesses } from '@/server/services/platform'
 import { resetDb } from '../helpers/db'
 
 describe('createBusinessWithOwner', () => {
@@ -117,5 +117,35 @@ describe('createPlatformAdmin', () => {
     await expect(
       createPlatformAdmin(db, { name: 'R', email: 'r@p.test', password: 'short' }),
     ).rejects.toMatchObject({ code: 'invalid_input' })
+  })
+})
+
+describe('listBusinesses', () => {
+  beforeEach(resetDb)
+
+  it('counts each business’s own active outlets and staff', async () => {
+    const a = await createBusinessWithOwner(db, {
+      name: 'Alpha Hardware',
+      ownerName: 'A',
+      ownerEmail: 'a@alpha.test',
+      ownerPassword: 'temp-pass-1',
+    })
+    await createBusinessWithOwner(db, {
+      name: 'Beta Hardware',
+      ownerName: 'B',
+      ownerEmail: 'b@beta.test',
+      ownerPassword: 'temp-pass-1',
+    })
+    await db.insert(outlets).values([
+      { businessId: a.businessId, name: 'Kitale', code: 'KTL' },
+      { businessId: a.businessId, name: 'Eldoret', code: 'ELD' },
+      { businessId: a.businessId, name: 'Closed', code: 'CLS', active: false },
+    ])
+
+    const rows = await listBusinesses(db)
+    expect(rows.map((r) => [r.name, r.outlets, r.staff])).toEqual([
+      ['Alpha Hardware', 2, 1],
+      ['Beta Hardware', 0, 1],
+    ])
   })
 })

@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { PageHeader } from '@/components/shell/page-header'
 import { eq } from 'drizzle-orm'
 import { db } from '@/db/client'
 import { businesses } from '@/db/schema'
@@ -11,8 +12,8 @@ import { CreateOutletForm, DefaultModeForm, OutletRow } from './outlet-forms'
 export default function OutletsPage() {
   return (
     <>
-      <h1 className="text-2xl font-semibold">Outlets</h1>
-      <Suspense fallback={<p className="mt-4 text-sm text-muted-foreground">Loading…</p>}>
+      <PageHeader title="Outlets" />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
         <OutletsContent />
       </Suspense>
     </>
@@ -29,7 +30,7 @@ async function OutletsContent() {
     .where(eq(businesses.id, ctx.businessId))
 
   return (
-    <div className="mt-4 flex flex-col gap-8">
+    <div className="flex flex-col gap-8">
       {canManage && business && (
         <section aria-labelledby="default-heading" className="flex flex-col gap-3">
           <h2 id="default-heading" className="text-lg font-medium">

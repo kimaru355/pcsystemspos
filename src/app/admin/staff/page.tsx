@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { PageHeader } from '@/components/shell/page-header'
 import { db } from '@/db/client'
 import { can } from '@/domain/permissions'
 import { listOutlets } from '@/server/services/outlets'
@@ -9,8 +10,8 @@ import { CreateStaffForm, StaffRow } from './staff-forms'
 export default function StaffPage() {
   return (
     <>
-      <h1 className="text-2xl font-semibold">Staff</h1>
-      <Suspense fallback={<p className="mt-4 text-sm text-muted-foreground">Loading…</p>}>
+      <PageHeader title="Staff" />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
         <StaffContent />
       </Suspense>
     </>
@@ -25,7 +26,7 @@ async function StaffContent() {
   const outletCodes = Object.fromEntries(outlets.map((o) => [o.id, o.code]))
 
   return (
-    <div className="mt-4 flex flex-col gap-8">
+    <div className="flex flex-col gap-8">
       <section aria-labelledby="list-heading" className="flex flex-col gap-3">
         <h2 id="list-heading" className="text-lg font-medium">
           {canManage ? 'Your team' : 'Your outlet team'}
