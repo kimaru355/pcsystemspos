@@ -13,7 +13,7 @@ import { recordAudit } from './audit'
  * Reusable by the CSV import (Task 6), all inside a caller-owned transaction:
  *  - validateCategoryInput / validateBrandInput / validateGroupInput  (pure, no DB)
  *  - insertCategoryTx / insertBrandTx / insertGroupTx                 (DB checks + insert + audit)
- *  - findOrCreateCategoryTx / findOrCreateBrandTx                     (case-insensitive match, else insert)
+ *  - findOrCreateCategoryTx / findOrCreateBrandTx / findOrCreateGroupTx (case-insensitive match, else insert)
  *  - normalizeAttributeKey(s)                                         (shared with items.ts)
  * Names are matched case-insensitively in the service because the DB uniques are case-sensitive;
  * a race that slips past the check is still caught by those uniques and mapped to `conflict`.
@@ -439,6 +439,14 @@ export async function insertGroupTx(tx: Tx, ctx: TenantCtx, v: ValidGroup): Prom
     data: v,
   })
   return toGroup(row)
+}
+
+/** Case-insensitive lookup of a group by name; creates it (no attribute keys, no category or brand) when missing. */
+export async function findOrCreateGroupTx(tx: Tx, ctx: TenantCtx, name: string): Promise<ItemGroup> {
+  const v = validateGroupInput({ name, attributeKeys: [] })
+  const existing = await findGroupByNameTx(tx, ctx, v.name)
+  if (existing) return toGroup(existing)
+  return insertGroupTx(tx, ctx, v)
 }
 
 export async function listGroups(db: Db, ctx: TenantCtx): Promise<ItemGroup[]> {

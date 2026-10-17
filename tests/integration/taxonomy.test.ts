@@ -10,6 +10,7 @@ import {
   createGroup,
   findOrCreateBrandTx,
   findOrCreateCategoryTx,
+  findOrCreateGroupTx,
   listBrands,
   listCategories,
   listGroups,
@@ -311,5 +312,18 @@ describe('item groups', () => {
       after: { name: 'Iron sheets', categoryId: null, attributeKeys: ['gauge'] },
     })
     expect(await auditCount(businessId, 'group.update')).toBe(1)
+  })
+
+  it('findOrCreateGroupTx reuses a group by name regardless of case, else creates one with no attributes', async () => {
+    const { ctx } = await setup()
+    const g = await createGroup(db, ctx, { name: 'Sheets', attributeKeys: ['gauge'] })
+    await db.transaction(async (tx) => {
+      const found = await findOrCreateGroupTx(tx, ctx, ' SHEETS ')
+      expect(found.id).toBe(g.id)
+      expect(found.attributeKeys).toEqual(['gauge'])
+      const created = await findOrCreateGroupTx(tx, ctx, 'Mesh')
+      expect(created).toMatchObject({ name: 'Mesh', attributeKeys: [], categoryId: null, brandId: null })
+    })
+    expect(await listGroups(db, ctx)).toHaveLength(2)
   })
 })
