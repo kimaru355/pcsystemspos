@@ -10,7 +10,8 @@ import { recordAudit } from './audit'
 /*
  * Taxonomy: categories (two levels), brands and item groups.
  *
- * Reusable by the CSV import (Task 6), all inside a caller-owned transaction:
+ * Reusable by the CSV import (Task 6), all inside a caller-owned transaction (the insert and
+ * find-or-create helpers take an optional trailing `importId`, stamped on the audit row's data):
  *  - validateCategoryInput / validateBrandInput / validateGroupInput  (pure, no DB)
  *  - insertCategoryTx / insertBrandTx / insertGroupTx                 (DB checks + insert + audit)
  *  - findOrCreateCategoryTx / findOrCreateBrandTx / findOrCreateGroupTx (case-insensitive match, else insert)
@@ -157,7 +158,12 @@ async function findCategoryByNameTx(
 }
 
 /** Insert a validated category (parent check, duplicate check, audit). Call inside a transaction. */
-export async function insertCategoryTx(tx: Tx, ctx: TenantCtx, v: ValidCategory): Promise<Category> {
+export async function insertCategoryTx(
+  tx: Tx,
+  ctx: TenantCtx,
+  v: ValidCategory,
+  importId?: string,
+): Promise<Category> {
   if (v.parentId !== null) await assertParentTx(tx, ctx, v.parentId)
   if (await findCategoryByNameTx(tx, ctx, v.name, v.parentId)) throw nameTaken('A category')
   const [row] = await tx
@@ -170,7 +176,7 @@ export async function insertCategoryTx(tx: Tx, ctx: TenantCtx, v: ValidCategory)
     action: 'category.create',
     entityType: 'category',
     entityId: row.id,
-    data: v,
+    data: importId ? { ...v, importId } : v,
   })
   return toCategory(row)
 }
@@ -181,12 +187,13 @@ export async function findOrCreateCategoryTx(
   ctx: TenantCtx,
   name: string,
   parentId: string | null,
+  importId?: string,
 ): Promise<Category> {
   const v = validateCategoryInput({ name, parentId })
   if (v.parentId !== null) await assertParentTx(tx, ctx, v.parentId)
   const existing = await findCategoryByNameTx(tx, ctx, v.name, v.parentId)
   if (existing) return toCategory(existing)
-  return insertCategoryTx(tx, ctx, v)
+  return insertCategoryTx(tx, ctx, v, importId)
 }
 
 export async function listCategories(db: Db, ctx: TenantCtx): Promise<Category[]> {
@@ -290,7 +297,12 @@ async function findBrandByNameTx(tx: Tx, ctx: TenantCtx, name: string, excludeId
 }
 
 /** Insert a validated brand (duplicate check, audit). Call inside a transaction. */
-export async function insertBrandTx(tx: Tx, ctx: TenantCtx, v: ValidBrand): Promise<Brand> {
+export async function insertBrandTx(
+  tx: Tx,
+  ctx: TenantCtx,
+  v: ValidBrand,
+  importId?: string,
+): Promise<Brand> {
   if (await findBrandByNameTx(tx, ctx, v.name)) throw nameTaken('A brand')
   const [row] = await tx.insert(brands).values({ businessId: ctx.businessId, name: v.name }).returning()
   await recordAudit(tx, {
@@ -299,17 +311,22 @@ export async function insertBrandTx(tx: Tx, ctx: TenantCtx, v: ValidBrand): Prom
     action: 'brand.create',
     entityType: 'brand',
     entityId: row.id,
-    data: v,
+    data: importId ? { ...v, importId } : v,
   })
   return toBrand(row)
 }
 
 /** Case-insensitive lookup of a brand by name; creates it when missing. */
-export async function findOrCreateBrandTx(tx: Tx, ctx: TenantCtx, name: string): Promise<Brand> {
+export async function findOrCreateBrandTx(
+  tx: Tx,
+  ctx: TenantCtx,
+  name: string,
+  importId?: string,
+): Promise<Brand> {
   const v = validateBrandInput({ name })
   const existing = await findBrandByNameTx(tx, ctx, v.name)
   if (existing) return toBrand(existing)
-  return insertBrandTx(tx, ctx, v)
+  return insertBrandTx(tx, ctx, v, importId)
 }
 
 export async function listBrands(db: Db, ctx: TenantCtx): Promise<Brand[]> {
@@ -423,7 +440,12 @@ async function findGroupByNameTx(tx: Tx, ctx: TenantCtx, name: string, excludeId
 }
 
 /** Insert a validated group (reference checks, duplicate check, audit). Call inside a transaction. */
-export async function insertGroupTx(tx: Tx, ctx: TenantCtx, v: ValidGroup): Promise<ItemGroup> {
+export async function insertGroupTx(
+  tx: Tx,
+  ctx: TenantCtx,
+  v: ValidGroup,
+  importId?: string,
+): Promise<ItemGroup> {
   await assertGroupRefsTx(tx, ctx, v)
   if (await findGroupByNameTx(tx, ctx, v.name)) throw nameTaken('A group')
   const [row] = await tx
@@ -436,17 +458,22 @@ export async function insertGroupTx(tx: Tx, ctx: TenantCtx, v: ValidGroup): Prom
     action: 'group.create',
     entityType: 'item_group',
     entityId: row.id,
-    data: v,
+    data: importId ? { ...v, importId } : v,
   })
   return toGroup(row)
 }
 
 /** Case-insensitive lookup of a group by name; creates it (no attribute keys, no category or brand) when missing. */
-export async function findOrCreateGroupTx(tx: Tx, ctx: TenantCtx, name: string): Promise<ItemGroup> {
+export async function findOrCreateGroupTx(
+  tx: Tx,
+  ctx: TenantCtx,
+  name: string,
+  importId?: string,
+): Promise<ItemGroup> {
   const v = validateGroupInput({ name, attributeKeys: [] })
   const existing = await findGroupByNameTx(tx, ctx, v.name)
   if (existing) return toGroup(existing)
-  return insertGroupTx(tx, ctx, v)
+  return insertGroupTx(tx, ctx, v, importId)
 }
 
 export async function listGroups(db: Db, ctx: TenantCtx): Promise<ItemGroup[]> {

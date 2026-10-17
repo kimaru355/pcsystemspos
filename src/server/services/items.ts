@@ -24,9 +24,11 @@ import { normalizeAttributeKey } from './taxonomy'
  *
  * Reusable by the CSV import (Task 6), all inside a caller-owned transaction:
  *  - validateItemInput(i) / validatePackInput(i, fractional) / normalizeBarcode(raw)   (pure, no DB)
- *  - insertItemTx(tx, ctx, validItem)                      references + SKU check, insert, audit `item.create`
- *  - insertPackTx(tx, ctx, itemId, validPack)              name check, insert, audit `pack.create`
- *  - insertBarcodeTx(tx, ctx, itemId, {barcode, packId})   pack/duplicate check, insert, audit `barcode.add`
+ *  - insertItemTx(tx, ctx, validItem, importId?)           references + SKU check, insert, audit `item.create`
+ *  - insertPackTx(tx, ctx, itemId, validPack, importId?)   name check, insert, audit `pack.create`
+ *  - insertBarcodeTx(tx, ctx, itemId, {barcode, packId}, importId?)   pack/duplicate check, insert, audit `barcode.add`
+ * `importId` (CSV import only) is stamped on the audit row's data so the activity feed can fold
+ * the per-entity rows of one import into its `catalog.import` summary.
  * The public functions below validate first, then call these inside one transaction.
  * A unique violation that races past a service check is mapped to `conflict` by `mapRace`.
  */
@@ -373,7 +375,12 @@ async function skuTakenTx(tx: Tx, ctx: TenantCtx, sku: string, excludeId?: strin
 // ------------------------------------------------------------------- inserts
 
 /** Insert a validated item (reference and SKU checks, audit `item.create`). Call inside a transaction. */
-export async function insertItemTx(tx: Tx, ctx: TenantCtx, v: ValidItem): Promise<Item> {
+export async function insertItemTx(
+  tx: Tx,
+  ctx: TenantCtx,
+  v: ValidItem,
+  importId?: string,
+): Promise<Item> {
   await assertRefsTx(tx, ctx, v)
   if (v.sku !== null && (await skuTakenTx(tx, ctx, v.sku))) throw new DomainError('conflict', SKU_TAKEN)
   const [row] = await tx
@@ -386,7 +393,7 @@ export async function insertItemTx(tx: Tx, ctx: TenantCtx, v: ValidItem): Promis
     action: 'item.create',
     entityType: 'item',
     entityId: row.id,
-    data: v,
+    data: importId ? { ...v, importId } : v,
   })
   return { ...toItemBase(row), packs: [], barcodes: [] }
 }
@@ -397,6 +404,7 @@ export async function insertPackTx(
   ctx: TenantCtx,
   itemId: string,
   v: ValidPack,
+  importId?: string,
 ): Promise<Pack> {
   const [dup] = await tx
     .select({ id: itemPacks.id })
@@ -414,7 +422,7 @@ export async function insertPackTx(
     action: 'pack.create',
     entityType: 'item_pack',
     entityId: row.id,
-    data: { itemId, ...v },
+    data: { itemId, ...v, ...(importId ? { importId } : {}) },
   })
   return toPack(row)
 }
@@ -425,6 +433,7 @@ export async function insertBarcodeTx(
   ctx: TenantCtx,
   itemId: string,
   v: { barcode: string; packId: string | null },
+  importId?: string,
 ): Promise<Barcode> {
   if (v.packId !== null) {
     if (!isUuid(v.packId)) throw new DomainError('not_found')
@@ -456,7 +465,7 @@ export async function insertBarcodeTx(
     action: 'barcode.add',
     entityType: 'item_barcode',
     entityId: row.id,
-    data: { itemId, barcode: v.barcode, packId: v.packId },
+    data: { itemId, barcode: v.barcode, packId: v.packId, ...(importId ? { importId } : {}) },
   })
   return toBarcode(row)
 }

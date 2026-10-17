@@ -137,6 +137,32 @@ test('owner builds a catalog, receives and counts stock, and imports more items'
   await page.getByRole('button', { name: 'Import 2 items' }).click()
   await expect(page.getByRole('status')).toContainText('Imported.')
 
+  // Choosing another file drops the old preview, so it can't be imported by mistake.
+  const washers = {
+    name: 'washers.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('name,base_unit,price\nWashers,pc,5\n'),
+  }
+  await page.getByLabel('CSV file').setInputFiles(washers)
+  await expect(page.getByRole('heading', { name: 'Ready to import' })).toHaveCount(0)
+
+  // A file without SKUs imports once; checking it again warns and needs "Import again anyway".
+  await page.getByRole('button', { name: 'Check file' }).click()
+  await expect(page.getByRole('heading', { name: 'Ready to import' })).toBeVisible()
+  await page.getByRole('button', { name: 'Import 1 item' }).click()
+  await expect(page.getByRole('status')).toContainText('Imported.')
+  await page.getByLabel('CSV file').setInputFiles(washers)
+  await page.getByRole('button', { name: 'Check file' }).click()
+  await expect(page.getByText(/This file was already imported on/).first()).toBeVisible()
+  await expect(page.getByText(/1 item name in this file already exists/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Import 1 item' })).toBeDisabled()
+  await page.getByLabel('Import again anyway').check()
+  await expect(page.getByRole('button', { name: 'Import 1 item' })).toBeEnabled()
+
+  // The overview shows the import as one line.
+  await page.goto('/admin')
+  await expect(page.getByText('Catalog imported.').first()).toBeVisible()
+
   // Both new items are listed.
   await page.goto('/admin/items')
   await expect(page.getByRole('link', { name: 'Cement 50kg' })).toBeVisible()

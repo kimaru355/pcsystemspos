@@ -12,6 +12,16 @@ function count(n: number, one: string, many = `${one}s`) {
   return `${n.toLocaleString('en-KE')} ${n === 1 ? one : many}`
 }
 
+const importedOn = new Intl.DateTimeFormat('en-KE', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Africa/Nairobi',
+})
+
+/** The service lists at most this many existing names; reaching it means there may be more. */
+const EXISTING_NAMES_SHOWN = 20
+
 function NameList({ label, names }: { label: string; names: string[] }) {
   if (names.length === 0) return null
   return (
@@ -30,12 +40,19 @@ export function ImportForm({ outletCodes }: { outletCodes: string[] }) {
   )
   const [applied, applyAction, applying] = useActionState<ApplyState, FormData>(applyImportAction, initialApply)
   const [tooBig, setTooBig] = useState<string | null>(null)
+  // Choosing another file makes the shown preview stale: hide it until "Check file" is run again
+  // (a new check has a new nonce, so it shows again).
+  const [staleNonce, setStaleNonce] = useState<string | undefined>(undefined)
+  const [confirmedFor, setConfirmedFor] = useState<string | undefined>(undefined)
 
-  const p = preview.preview
+  const stale = staleNonce !== undefined && staleNonce === preview.nonce
+  const p = stale ? undefined : preview.preview
   const errorCount = preview.errorCount ?? 0
   const mine = applied.forPreview !== undefined && applied.forPreview === preview.nonce
   const finished = mine && applied.ok === true && applied.result !== undefined
-  const canImport = p !== undefined && errorCount === 0 && p.rowCount > 0 && !finished
+  const duplicate = p?.alreadyImportedAt != null
+  const confirmed = confirmedFor === preview.nonce
+  const canImport = p !== undefined && errorCount === 0 && p.rowCount > 0 && !finished && (!duplicate || confirmed)
 
   return (
     <div className="flex flex-col gap-8">
@@ -55,6 +72,7 @@ export function ImportForm({ outletCodes }: { outletCodes: string[] }) {
               required
               disabled={applying}
               onChange={(e) => {
+                setStaleNonce(preview.nonce)
                 const file = e.target.files?.[0]
                 setTooBig(
                   file && file.size > MAX_IMPORT_BYTES
@@ -71,7 +89,7 @@ export function ImportForm({ outletCodes }: { outletCodes: string[] }) {
             {checking ? 'Checking…' : 'Check file'}
           </Button>
           <p aria-live="polite" className="min-h-5 text-sm text-destructive">
-            {preview.message}
+            {stale ? '' : preview.message}
           </p>
         </div>
       </form>
@@ -94,6 +112,22 @@ export function ImportForm({ outletCodes }: { outletCodes: string[] }) {
               </>
             )}
           </p>
+
+          {p.alreadyImportedAt !== null && (
+            <p role="alert" className="max-w-[65ch] text-sm font-medium text-owed-ink">
+              This file was already imported on {importedOn.format(new Date(p.alreadyImportedAt))}. Importing it again
+              adds every item a second time and doubles their opening stock.
+            </p>
+          )}
+          {p.existingNames.length > 0 && (
+            <p className="max-w-[65ch] text-sm text-owed-ink">
+              {p.existingNames.length >= EXISTING_NAMES_SHOWN ? 'At least ' : ''}
+              {count(p.existingNames.length, 'item name')} in this file {p.existingNames.length === 1 ? 'already exists' : 'already exist'} in your catalog:{' '}
+              <span className="font-medium break-words">{p.existingNames.join(', ')}</span>
+              {p.existingNames.length >= EXISTING_NAMES_SHOWN ? ' and possibly more' : ''}. Importing creates new items
+              with the same names; it does not update the old ones.
+            </p>
+          )}
 
           <dl className="flex flex-col gap-3">
             <NameList label="New categories" names={p.newCategories} />
@@ -146,6 +180,19 @@ export function ImportForm({ outletCodes }: { outletCodes: string[] }) {
           <form action={applyAction} className="flex flex-col gap-2">
             <input type="hidden" name="csv" value={preview.csv ?? ''} />
             <input type="hidden" name="previewNonce" value={preview.nonce ?? ''} />
+            {duplicate && !finished && (
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  name="confirmDuplicate"
+                  value="yes"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmedFor(e.target.checked ? preview.nonce : undefined)}
+                  disabled={applying}
+                />
+                Import again anyway
+              </label>
+            )}
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" size="lg" disabled={!canImport || applying || checking}>
                 {applying ? 'Importing…' : finished ? 'Imported' : `Import ${count(p.rowCount, 'item')}`}

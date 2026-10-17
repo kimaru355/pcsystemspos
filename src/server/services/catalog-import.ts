@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { createHash, randomUUID } from 'node:crypto'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
-import { brands, categories, itemBarcodes, itemGroups, items, outlets } from '@/db/schema'
+import { auditLog, brands, categories, itemBarcodes, itemGroups, items, outlets } from '@/db/schema'
 import { validateImport, type ImportError, type ImportRow } from '@/domain/catalog-import'
 import { parseCsv } from '@/domain/csv'
 import { isUniqueViolation } from '@/server/db-errors'
@@ -50,13 +50,23 @@ export type ImportPreview = {
   /** Non-zero opening-stock cells. */
   stockCells: number
   errors: ImportError[]
+  /** ISO time of the most recent import of this same file (by content hash) in this business. */
+  alreadyImportedAt: string | null
+  /** Row item names that already exist in the business (case-insensitive), as spelled in the file; at most 20. */
+  existingNames: string[]
 }
 
 export type ImportResult = { itemCount: number; packCount: number; stockCells: number }
 
 const MAX_TEXT_CHARS = 2_000_000
+const MAX_EXISTING_NAMES = 20
 const IN_CHUNK = 1000
 const OPENING_STOCK_NOTE = 'Opening stock'
+
+/** sha256 hex of the CSV text with CRLF normalised to LF and trailing whitespace trimmed. */
+function fileHashOf(csvText: string): string {
+  return createHash('sha256').update(csvText.replace(/\r\n/g, '\n').trimEnd()).digest('hex')
+}
 
 type PlannedPack = ValidPack & { barcode: string | null }
 type PlannedRow = {
@@ -65,7 +75,12 @@ type PlannedRow = {
   barcode: string | null
   packs: PlannedPack[]
 }
-type Plan = { preview: ImportPreview; planned: PlannedRow[]; outletIds: Map<string, string> }
+type Plan = {
+  preview: ImportPreview
+  planned: PlannedRow[]
+  outletIds: Map<string, string>
+  fileHash: string
+}
 
 // ------------------------------------------------------------------ row rules
 
@@ -244,9 +259,24 @@ async function newTaxonomy(db: Db | Tx, ctx: TenantCtx, rows: ImportRow[]) {
   }
 }
 
+/** Row names that already exist as items (case-insensitive), as spelled in the file, at most MAX_EXISTING_NAMES. */
+async function existingItemNames(db: Db | Tx, ctx: TenantCtx, rows: ImportRow[]): Promise<string[]> {
+  const byKey = new Map<string, string>()
+  for (const r of rows) if (!byKey.has(r.name.toLowerCase())) byKey.set(r.name.toLowerCase(), r.name)
+  const found = await existingSet(db, [...byKey.keys()], async (chunk) =>
+    (
+      await db
+        .select({ name: sql<string>`lower(${items.name})` })
+        .from(items)
+        .where(and(eq(items.businessId, ctx.businessId), inArray(sql`lower(${items.name})`, chunk)))
+    ).map((r) => r.name),
+  )
+  return [...byKey].filter(([key]) => found.has(key)).map(([, name]) => name).slice(0, MAX_EXISTING_NAMES)
+}
+
 // ----------------------------------------------------------------------- plan
 
-function emptyPreview(errors: ImportError[]): ImportPreview {
+function emptyPreview(errors: ImportError[], alreadyImportedAt: string | null): ImportPreview {
   return {
     rowCount: 0,
     itemCount: 0,
@@ -256,8 +286,34 @@ function emptyPreview(errors: ImportError[]): ImportPreview {
     newGroups: [],
     stockCells: 0,
     errors,
+    alreadyImportedAt,
+    existingNames: [],
   }
 }
+
+/** When this business last imported a file with this hash (ISO), or null. */
+async function lastImportOf(db: Db | Tx, ctx: TenantCtx, fileHash: string): Promise<string | null> {
+  const [row] = await db
+    .select({ at: auditLog.createdAt })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.businessId, ctx.businessId),
+        eq(auditLog.action, 'catalog.import'),
+        sql`${auditLog.data} ->> 'fileHash' = ${fileHash}`,
+      ),
+    )
+    .orderBy(desc(auditLog.createdAt), desc(auditLog.seq))
+    .limit(1)
+  return row ? row.at.toISOString() : null
+}
+
+const importedOn = new Intl.DateTimeFormat('en-KE', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Africa/Nairobi',
+})
 
 async function planImport(db: Db | Tx, ctx: TenantCtx, csvText: string): Promise<Plan> {
   if (typeof csvText !== 'string') throw new DomainError('invalid_input', 'Upload a CSV file.')
@@ -265,13 +321,20 @@ async function planImport(db: Db | Tx, ctx: TenantCtx, csvText: string): Promise
     throw new DomainError('invalid_input', 'The file is too large. The limit is 2 MB.')
   }
   const outletIds = await loadOutletIds(db, ctx)
+  const fileHash = fileHashOf(csvText)
+  const alreadyImportedAt = await lastImportOf(db, ctx, fileHash)
 
   let table: string[][]
   try {
     table = parseCsv(csvText)
   } catch (e) {
     if (e instanceof RangeError) {
-      return { preview: emptyPreview([{ line: null, column: null, message: e.message }]), planned: [], outletIds }
+      return {
+        preview: emptyPreview([{ line: null, column: null, message: e.message }], alreadyImportedAt),
+        planned: [],
+        outletIds,
+        fileHash,
+      }
     }
     throw e
   }
@@ -330,8 +393,10 @@ async function planImport(db: Db | Tx, ctx: TenantCtx, csvText: string): Promise
     stockCells: goodRows.reduce((n, r) => n + Object.keys(r.stock).length, 0),
     ...(await newTaxonomy(db, ctx, goodRows)),
     errors,
+    alreadyImportedAt,
+    existingNames: await existingItemNames(db, ctx, goodRows),
   }
-  return { preview, planned: good, outletIds }
+  return { preview, planned: good, outletIds, fileHash }
 }
 
 // --------------------------------------------------------------------- public
@@ -346,11 +411,28 @@ export async function previewImport(db: Db, ctx: TenantCtx, csvText: string): Pr
  * Re-validate and apply a CSV in one transaction. Any error refuses the whole file
  * (`invalid_input`, first error) and nothing is written.
  */
-export async function applyImport(db: Db, ctx: TenantCtx, csvText: string): Promise<ImportResult> {
+export async function applyImport(
+  db: Db,
+  ctx: TenantCtx,
+  csvText: string,
+  opts: { confirmDuplicate?: boolean } = {},
+): Promise<ImportResult> {
   assertCan(ctx, 'catalog.manage')
   try {
     return await db.transaction(async (tx) => {
-      const { preview, planned, outletIds } = await planImport(tx, ctx, csvText)
+      // Two applies of the same file queue here, so the second sees the first's audit row.
+      if (typeof csvText === 'string') {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`catalog.import:${ctx.businessId}:${fileHashOf(csvText)}`}, 0))`,
+        )
+      }
+      const { preview, planned, outletIds, fileHash } = await planImport(tx, ctx, csvText)
+      if (preview.alreadyImportedAt !== null && opts.confirmDuplicate !== true) {
+        throw new DomainError(
+          'conflict',
+          `This file was already imported on ${importedOn.format(new Date(preview.alreadyImportedAt))}. Tick "Import again anyway" to import it again.`,
+        )
+      }
       if (preview.errors.length > 0) {
         const first = preview.errors[0]
         throw new DomainError(
@@ -359,6 +441,7 @@ export async function applyImport(db: Db, ctx: TenantCtx, csvText: string): Prom
         )
       }
 
+      const importId = randomUUID()
       const categoryIds = new Map<string, string>()
       const brandIds = new Map<string, string>()
       const groupIds = new Map<string, string>()
@@ -375,28 +458,28 @@ export async function applyImport(db: Db, ctx: TenantCtx, csvText: string): Prom
         let categoryId: string | null = null
         if (row.category !== null) {
           const topKey = row.category.toLowerCase()
-          categoryId = await cached(categoryIds, topKey, () => findOrCreateCategoryTx(tx, ctx, row.category!, null))
+          categoryId = await cached(categoryIds, topKey, () => findOrCreateCategoryTx(tx, ctx, row.category!, null, importId))
           if (row.subcategory !== null) {
             const parentId = categoryId
             categoryId = await cached(categoryIds, `${topKey}|${row.subcategory.toLowerCase()}`, () =>
-              findOrCreateCategoryTx(tx, ctx, row.subcategory!, parentId),
+              findOrCreateCategoryTx(tx, ctx, row.subcategory!, parentId, importId),
             )
           }
         }
         const brandId =
           row.brand === null
             ? null
-            : await cached(brandIds, row.brand.toLowerCase(), () => findOrCreateBrandTx(tx, ctx, row.brand!))
+            : await cached(brandIds, row.brand.toLowerCase(), () => findOrCreateBrandTx(tx, ctx, row.brand!, importId))
         const groupId =
           row.group === null
             ? null
-            : await cached(groupIds, row.group.toLowerCase(), () => findOrCreateGroupTx(tx, ctx, row.group!))
+            : await cached(groupIds, row.group.toLowerCase(), () => findOrCreateGroupTx(tx, ctx, row.group!, importId))
 
-        const created = await insertItemTx(tx, ctx, { ...item, categoryId, brandId, groupId })
-        if (barcode !== null) await insertBarcodeTx(tx, ctx, created.id, { barcode, packId: null })
+        const created = await insertItemTx(tx, ctx, { ...item, categoryId, brandId, groupId }, importId)
+        if (barcode !== null) await insertBarcodeTx(tx, ctx, created.id, { barcode, packId: null }, importId)
         for (const { barcode: packBarcode, ...pack } of packs) {
-          const p = await insertPackTx(tx, ctx, created.id, pack)
-          if (packBarcode !== null) await insertBarcodeTx(tx, ctx, created.id, { barcode: packBarcode, packId: p.id })
+          const p = await insertPackTx(tx, ctx, created.id, pack, importId)
+          if (packBarcode !== null) await insertBarcodeTx(tx, ctx, created.id, { barcode: packBarcode, packId: p.id }, importId)
         }
         for (const [code, qtyMilli] of Object.entries(row.stock)) {
           // Only ids resolved from this business's active outlets are ever passed on.
@@ -424,8 +507,8 @@ export async function applyImport(db: Db, ctx: TenantCtx, csvText: string): Prom
         actorUserId: ctx.userId,
         action: 'catalog.import',
         entityType: 'catalog_import',
-        entityId: randomUUID(),
-        data: result,
+        entityId: importId,
+        data: { ...result, importId, fileHash },
       })
       return result
     })

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/client'
@@ -375,7 +376,110 @@ describe('applyImport', () => {
     const { ctx } = await setup()
     await applyImport(db, ctx, csv([sheet]))
     const before = await counts()
-    await expectDomain(applyImport(db, ctx, csv([sheet])), 'invalid_input', /^Line 2: /)
+    await expectDomain(applyImport(db, ctx, csv([sheet])), 'conflict', /^This file was already imported on /)
     expect(await counts()).toEqual(before)
+    // Confirmed again: the SKU check still refuses it, and nothing is written.
+    await expectDomain(applyImport(db, ctx, csv([sheet]), { confirmDuplicate: true }), 'invalid_input', /^Line 2: /)
+    expect(await counts()).toEqual(before)
+  })
+
+  it('stamps one import id on every per-entity audit row and on the summary, plus the file hash', async () => {
+    const { ctx, businessId } = await setup()
+    const text = csv([sheet, mesh])
+    await applyImport(db, ctx, text)
+    const rows = await db.select().from(auditLog).where(eq(auditLog.businessId, businessId))
+    const summary = rows.find((r) => r.action === 'catalog.import')!
+    const data = summary.data as { importId: string; fileHash: string }
+    expect(data.importId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(summary.entityId).toBe(data.importId)
+    const normalised = text.replace(/\r\n/g, '\n').trimEnd()
+    expect(data.fileHash).toBe(createHash('sha256').update(normalised).digest('hex'))
+    const per = rows.filter((r) => r.action !== 'catalog.import')
+    expect(per.map((r) => r.action).sort()).toEqual(
+      expect.arrayContaining(['item.create', 'pack.create', 'barcode.add', 'category.create', 'brand.create', 'group.create']),
+    )
+    for (const r of per) expect((r.data as { importId?: string }).importId).toBe(data.importId)
+  })
+
+  it('refuses the same rows without SKU or barcode a second time, and writes nothing', async () => {
+    const { ctx } = await setup()
+    const text = csv([
+      { name: 'Nails 3in', base_unit: 'kg', price: '200', stock_KTL: '10' },
+      { name: 'Screws', base_unit: 'pc', price: '5', stock_KTL: '100' },
+    ])
+    await applyImport(db, ctx, text)
+    const before = await counts()
+    await expectDomain(applyImport(db, ctx, text), 'conflict', /Tick "Import again anyway" to import it again\.$/)
+    expect(await counts()).toEqual(before)
+    // The same text with Windows line endings and a trailing newline is the same file.
+    await expectDomain(applyImport(db, ctx, text.replace(/\r?\n/g, '\r\n') + '\r\n'), 'conflict')
+    expect(await counts()).toEqual(before)
+  })
+
+  it('imports a file again when told to', async () => {
+    const { ctx } = await setup()
+    const text = csv([{ name: 'Nails 3in', base_unit: 'kg', price: '200', stock_KTL: '10' }])
+    await applyImport(db, ctx, text)
+    const result = await applyImport(db, ctx, text, { confirmDuplicate: true })
+    expect(result).toEqual({ itemCount: 1, packCount: 0, stockCells: 1 })
+    expect(await db.$count(items)).toBe(2)
+    expect(await db.$count(auditLog, eq(auditLog.action, 'catalog.import'))).toBe(2)
+  })
+
+  it('a different file or another business is not a duplicate', async () => {
+    const a = await setup()
+    const b = await setup()
+    const text = csv([{ name: 'Nails 3in', base_unit: 'kg', price: '200' }])
+    await applyImport(db, a.ctx, text)
+    await applyImport(db, b.ctx, text)
+    await applyImport(db, a.ctx, csv([{ name: 'Screws', base_unit: 'pc', price: '5' }]))
+    expect(await db.$count(items)).toBe(3)
+  })
+})
+
+describe('previewImport duplicates', () => {
+  beforeEach(resetDb)
+
+  it('reports when the file was already imported and which names already exist', async () => {
+    const { ctx } = await setup()
+    const text = csv([
+      { name: 'Nails 3in', base_unit: 'kg', price: '200' },
+      { name: 'Screws', base_unit: 'pc', price: '5' },
+    ])
+    const first = await previewImport(db, ctx, text)
+    expect(first).toMatchObject({ alreadyImportedAt: null, existingNames: [] })
+
+    await applyImport(db, ctx, text)
+    const second = await previewImport(db, ctx, text.replace(/\r?\n/g, '\r\n'))
+    expect(second.alreadyImportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(second.existingNames).toEqual(['Nails 3in', 'Screws'])
+
+    // A new file that shares one name (any case) is not "already imported" but lists the name.
+    const third = await previewImport(
+      db,
+      ctx,
+      csv([
+        { name: 'NAILS 3IN', base_unit: 'kg', price: '200' },
+        { name: 'Washers', base_unit: 'pc', price: '1' },
+      ]),
+    )
+    expect(third.alreadyImportedAt).toBeNull()
+    expect(third.existingNames).toEqual(['NAILS 3IN'])
+  })
+
+  it('lists at most 20 existing names', async () => {
+    const { ctx } = await setup()
+    const rows = Array.from({ length: 25 }, (_, i) => ({ name: `Bolt ${i}`, base_unit: 'pc', price: '1' }))
+    await applyImport(db, ctx, csv(rows))
+    const p = await previewImport(db, ctx, csv([...rows, { name: 'Bolt 0', base_unit: 'pc', price: '2' }]))
+    expect(p.existingNames).toHaveLength(20)
+  })
+
+  it('does not see another business\'s imports or items', async () => {
+    const a = await setup()
+    const b = await setup()
+    const text = csv([{ name: 'Nails 3in', base_unit: 'kg', price: '200' }])
+    await applyImport(db, a.ctx, text)
+    expect(await previewImport(db, b.ctx, text)).toMatchObject({ alreadyImportedAt: null, existingNames: [] })
   })
 })

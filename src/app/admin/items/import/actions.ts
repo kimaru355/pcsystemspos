@@ -55,7 +55,7 @@ export async function applyImportAction(_prev: ApplyState, formData: FormData): 
   const bytes = new TextEncoder().encode(csv).length
   if (bytes > MAX_IMPORT_BYTES) return { message: TOO_LARGE(bytes), nonce: nonce(), forPreview }
   try {
-    const result = await applyImport(db, ctx, csv)
+    const result = await applyImport(db, ctx, csv, { confirmDuplicate: formData.get('confirmDuplicate') === 'yes' })
     revalidatePath('/admin/items')
     revalidatePath('/admin/stock')
     revalidatePath('/admin')
