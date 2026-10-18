@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ADJUST_REASONS } from './stock'
+import { ADJUST_REASONS, type AdjustReason } from './stock'
 
 /*
  * The operations a till pushes to `/api/sync`, and the request/response shapes. Shared by the
@@ -72,7 +72,7 @@ export const stockAdjustSchema = z.object({
   movementId: uuidSchema,
   itemId: uuidSchema,
   deltaMilli: int.refine((n) => n !== 0, 'Must not be 0'),
-  reason: z.enum(ADJUST_REASONS as [string, ...string[]]),
+  reason: z.enum(ADJUST_REASONS as readonly AdjustReason[] as [AdjustReason, ...AdjustReason[]]),
   note: shortText.nullable(),
 })
 

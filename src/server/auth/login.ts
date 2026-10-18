@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
-import { memberships, users } from '@/db/schema'
+import { users } from '@/db/schema'
 import { normalizeKePhone } from '@/domain/phone'
 import { DomainError } from '../errors'
 import { completeAttempt, reserveAttempt } from './lockout'
@@ -26,10 +26,18 @@ function normalizeIdentifier(raw: string): { kind: 'email' | 'phone'; value: str
   return phone ? { kind: 'phone', value: phone } : null
 }
 
-export async function login(
+export type CredentialCheck =
+  | { ok: true; userId: string; mustChangePassword: boolean }
+  | { ok: false; reason: 'invalid' | 'locked' }
+
+/**
+ * Checks phone/email and password under the login lockout, without creating a session.
+ * Used by the web login and by the till's first sign-in on a device.
+ */
+export async function checkCredentials(
   db: Db,
   input: { identifier: string; password: string },
-): Promise<LoginResult> {
+): Promise<CredentialCheck> {
   const identity = normalizeIdentifier(input.identifier)
   // Unparseable identifiers are keyed by their trimmed text so they lock like any other.
   // Namespaced so a login identifier can never collide with another lockout key (e.g. `pwchange:`).
@@ -51,11 +59,12 @@ export async function login(
         id: users.id,
         passwordHash: users.passwordHash,
         mustChangePassword: users.mustChangePassword,
-        // Platform admins have no membership; everyone else needs an active one.
-        allowed: sql<boolean>`(${users.isPlatformAdmin} or ${memberships.active} is true)`,
+        // Platform admins have no membership; everyone else needs an active one (old ones stay as history).
+        // Spelled out: Drizzle leaves column names unqualified in a single-table select.
+        allowed: sql<boolean>`("users"."is_platform_admin" or exists (
+          select 1 from "memberships" m where m."user_id" = "users"."id" and m."active"))`,
       })
       .from(users)
-      .leftJoin(memberships, eq(memberships.userId, users.id))
       .where(where)
   }
 
@@ -72,8 +81,17 @@ export async function login(
   if (!passwordOk || !user || !user.allowed) return { ok: false, reason: 'invalid' }
 
   await completeAttempt(db, reservation.attemptId)
-  const { token, expiresAt } = await createSession(db, user.id)
-  return { ok: true, token, expiresAt, mustChangePassword: user.mustChangePassword }
+  return { ok: true, userId: user.id, mustChangePassword: user.mustChangePassword }
+}
+
+export async function login(
+  db: Db,
+  input: { identifier: string; password: string },
+): Promise<LoginResult> {
+  const check = await checkCredentials(db, input)
+  if (!check.ok) return check
+  const { token, expiresAt } = await createSession(db, check.userId)
+  return { ok: true, token, expiresAt, mustChangePassword: check.mustChangePassword }
 }
 
 export async function changePassword(

@@ -10,6 +10,10 @@ export type AuditEvent = {
   entityId: string
   reason?: string
   data?: unknown
+  /** For actions taken on a till: the device, when it happened there, and the sync op. */
+  deviceId?: string | null
+  occurredAt?: Date | null
+  opId?: string | null
 }
 
 /** Pass the surrounding transaction so the audit row commits or rolls back with the change. */
@@ -22,5 +26,8 @@ export async function recordAudit(tx: Tx | Db, e: AuditEvent): Promise<void> {
     entityId: e.entityId,
     reason: e.reason ?? null,
     data: e.data ?? null,
+    deviceId: e.deviceId ?? null,
+    occurredAt: e.occurredAt ?? null,
+    opId: e.opId ?? null,
   })
 }

@@ -1,8 +1,9 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
 import { membershipOutlets, memberships, outlets, users } from '@/db/schema'
 import { isUuid } from '@/domain/ids'
 import { normalizeKePhone } from '@/domain/phone'
+import { createPinVerifier, PIN_RE } from '@/domain/pin'
 import { can, ROLES, type Role } from '@/domain/permissions'
 import { hashSecret } from '@/server/auth/secret'
 import { invalidateUserSessions } from '@/server/auth/session'
@@ -26,7 +27,6 @@ export type StaffMember = {
 const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_LENGTH = 200
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const PIN_RE = /^\d{4,6}$/
 
 function parseRole(role: unknown): Role {
   if (!ROLES.includes(role as Role)) throw new DomainError('invalid_input', 'Choose a valid role.')
@@ -192,18 +192,29 @@ export async function createStaff(
   try {
     return await db.transaction(async (tx) => {
       await assertActiveOutlets(tx, ctx.businessId, outletIds)
-      // Logins match email case-insensitively, so guard against differently-cased duplicates too.
-      if (email) {
-        const [clash] = await tx.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${email}`)
-        if (clash) throw new DomainError('conflict', 'A user with that email already exists.')
+      const existing = await findPerson(tx, email, phone)
+      let userId: string
+      let rehired = false
+      if (existing) {
+        await assertCanRehire(tx, ctx.businessId, existing, email, phone)
+        await tx
+          .update(users)
+          .set({ name, email: email ?? existing.email, phone: phone ?? existing.phone, passwordHash, mustChangePassword: true })
+          .where(eq(users.id, existing.id))
+        // The person's old sessions belonged to their previous job.
+        await invalidateUserSessions(tx, existing.id)
+        userId = existing.id
+        rehired = true
+      } else {
+        const [user] = await tx
+          .insert(users)
+          .values({ name, email, phone, passwordHash, mustChangePassword: true })
+          .returning({ id: users.id })
+        userId = user.id
       }
-      const [user] = await tx
-        .insert(users)
-        .values({ name, email, phone, passwordHash, mustChangePassword: true })
-        .returning({ id: users.id })
       const [membership] = await tx
         .insert(memberships)
-        .values({ businessId: ctx.businessId, userId: user.id, role })
+        .values({ businessId: ctx.businessId, userId, role })
         .returning({ id: memberships.id })
       if (outletIds.length > 0) {
         await tx
@@ -222,7 +233,7 @@ export async function createStaff(
         action: 'staff.create',
         entityType: 'membership',
         entityId: membership.id,
-        data: { name, role, outletIds },
+        data: { name, role, outletIds, ...(rehired ? { rehired: true } : {}) },
       })
       return (await loadOne(tx, ctx.businessId, membership.id))!
     })
@@ -231,6 +242,69 @@ export async function createStaff(
       throw new DomainError('conflict', 'A user with that email or phone number already exists.')
     }
     throw e
+  }
+}
+
+type Person = { id: string; email: string | null; phone: string | null; isPlatformAdmin: boolean }
+
+/**
+ * The one person with this email or phone, if any (locked for the rest of the transaction).
+ * Two different people matching the email and the phone is a conflict.
+ */
+async function findPerson(tx: Tx, email: string | null, phone: string | null): Promise<Person | null> {
+  const matches = [
+    // Logins match email case-insensitively, so guard against differently-cased duplicates too.
+    email ? sql`lower(${users.email}) = ${email}` : undefined,
+    phone ? eq(users.phone, phone) : undefined,
+  ].filter((c) => c !== undefined)
+  const rows = await tx
+    .select({ id: users.id, email: users.email, phone: users.phone, isPlatformAdmin: users.isPlatformAdmin })
+    .from(users)
+    .where(or(...matches))
+    .for('update')
+  if (rows.length > 1) {
+    throw new DomainError('conflict', 'That email and that phone number belong to two different people.')
+  }
+  return rows[0] ?? null
+}
+
+/**
+ * A person may join this business when they have no active membership anywhere (they left their
+ * last job). Their contact details must not contradict the ones given.
+ */
+async function assertCanRehire(
+  tx: Tx,
+  businessId: string,
+  person: Person,
+  email: string | null,
+  phone: string | null,
+): Promise<void> {
+  if (person.isPlatformAdmin) {
+    throw new DomainError('conflict', 'A user with that email or phone number already exists.')
+  }
+  if ((email && person.email && person.email.toLowerCase() !== email) || (phone && person.phone && person.phone !== phone)) {
+    throw new DomainError(
+      'conflict',
+      email && person.email?.toLowerCase() === email
+        ? 'That email belongs to someone with a different phone number.'
+        : 'That phone number belongs to someone with a different email.',
+    )
+  }
+  const rows = await tx
+    .select({ businessId: memberships.businessId, active: memberships.active })
+    .from(memberships)
+    .where(eq(memberships.userId, person.id))
+    .for('update')
+  if (rows.some((m) => m.active)) {
+    throw new DomainError(
+      'conflict',
+      rows.some((m) => m.active && m.businessId === businessId)
+        ? 'That person is already on your staff.'
+        : 'That person works at another business. They must be removed there first.',
+    )
+  }
+  if (rows.some((m) => m.businessId === businessId)) {
+    throw new DomainError('conflict', 'That person used to work here. Reactivate them from the staff list instead.')
   }
 }
 
@@ -345,7 +419,17 @@ export async function reactivateStaff(db: Db, ctx: TenantCtx, membershipId: stri
   await db.transaction(async (tx) => {
     const target = await getTarget(tx, ctx.businessId, membershipId)
     if (target.active) throw new DomainError('conflict', 'That person is already active.')
-    await tx.update(memberships).set({ active: true }).where(eq(memberships.id, target.id))
+    try {
+      // Savepoint: the unique index on active memberships turns a person active elsewhere into a conflict.
+      await tx.transaction(async (sp) => {
+        await sp.update(memberships).set({ active: true }).where(eq(memberships.id, target.id))
+      })
+    } catch (e) {
+      if (isUniqueViolation(e)) {
+        throw new DomainError('conflict', 'That person now works at another business.')
+      }
+      throw e
+    }
     await recordAudit(tx, {
       businessId: ctx.businessId,
       actorUserId: ctx.userId,
@@ -363,6 +447,7 @@ export async function setPin(db: Db, ctx: TenantCtx, membershipId: string, pin: 
     throw new DomainError('invalid_input', 'PIN must be 4 to 6 digits.')
   }
   const pinHash = await hashSecret(pin)
+  const { salt: pinSalt, verifier: pinVerifier } = await createPinVerifier(pin)
 
   await db.transaction(async (tx) => {
     const target = await getTarget(tx, ctx.businessId, membershipId)
@@ -383,7 +468,7 @@ export async function setPin(db: Db, ctx: TenantCtx, membershipId: string, pin: 
       }
       if (!allowed) throw new DomainError('forbidden')
     }
-    await tx.update(memberships).set({ pinHash }).where(eq(memberships.id, target.id))
+    await tx.update(memberships).set({ pinHash, pinSalt, pinVerifier }).where(eq(memberships.id, target.id))
     // Never record the PIN or its hash.
     await recordAudit(tx, {
       businessId: ctx.businessId,

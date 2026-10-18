@@ -4,6 +4,8 @@ import {
   categories,
   itemBarcodes,
   items,
+  orderLines,
+  orders,
   outletStock,
   outlets,
   stockMovements,
@@ -69,6 +71,10 @@ export type NewMovement = {
   actorUserId: string
   occurredAt?: Date
   id?: string
+  /** Set for movements made on a till. */
+  deviceId?: string | null
+  /** Set for `collect` movements. */
+  orderLineId?: string | null
 }
 
 export type StockRow = {
@@ -164,6 +170,8 @@ export async function insertMovementTx(
       reason: m.reason ?? null,
       note: m.note ?? null,
       actorUserId: m.actorUserId,
+      deviceId: m.deviceId ?? null,
+      orderLineId: m.orderLineId ?? null,
       ...(m.occurredAt ? { occurredAt: m.occurredAt } : {}),
     })
     .returning({ id: stockMovements.id })
@@ -196,13 +204,36 @@ export async function applyMovement(
   return insertMovementTx(tx, locked, m)
 }
 
-/** Milli owed to customers per item (collect-later). Always 0 in this phase; Phase 4 fills it in. */
+/**
+ * Base-unit milli owed to customers per item at an outlet (collect-later): what open orders'
+ * lines still have to hand over. Every requested item is in the map (0 when nothing is owed);
+ * `itemIds` null means every item with something owed.
+ */
 export async function owedMilliFor(
-  _db: Db | Tx,
-  _outletId: string,
-  itemIds: string[],
+  db: Db | Tx,
+  outletId: string,
+  itemIds: string[] | null,
 ): Promise<Map<string, Milli>> {
-  return new Map(itemIds.map((id) => [id, 0]))
+  const out = new Map<string, Milli>((itemIds ?? []).map((id) => [id, 0]))
+  if (itemIds !== null && itemIds.length === 0) return out
+  const rows = await db
+    .select({
+      itemId: orderLines.itemId,
+      owed: sql<string>`sum((${orderLines.qtyMilli} - ${orderLines.cancelledMilli} - ${orderLines.collectedMilli})
+        * ${orderLines.baseQtyPerUnitMilli} / 1000)::bigint`,
+    })
+    .from(orderLines)
+    .innerJoin(orders, eq(orders.id, orderLines.orderId))
+    .where(
+      and(
+        eq(orders.outletId, outletId),
+        eq(orders.status, 'open'),
+        itemIds === null ? undefined : inArray(orderLines.itemId, itemIds),
+      ),
+    )
+    .groupBy(orderLines.itemId)
+  for (const r of rows) out.set(r.itemId, Number(r.owed))
+  return out
 }
 
 // -------------------------------------------------------------------- helpers
@@ -364,7 +395,7 @@ async function loadStockRows(
     .where(and(...conditions))
     .orderBy(asc(items.name), asc(items.id))
 
-  const owed = await owedMilliFor(db, outletId, rows.map((r) => r.itemId))
+  const owed = await owedMilliFor(db, outletId, null)
   const out: StockRow[] = rows.map((r) => {
     const onHand = r.onHandMilli ?? 0
     const owedMilli = owed.get(r.itemId) ?? 0

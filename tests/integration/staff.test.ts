@@ -606,3 +606,112 @@ describe('malformed ids', () => {
     await expect(setPin(db, ctx, 'nope', '1234')).rejects.toMatchObject({ code: 'not_found' })
   })
 })
+
+describe('a person moving between businesses', () => {
+  beforeEach(resetDb)
+
+  async function leaver() {
+    const a = await setup(['KTL'])
+    const member = await createStaff(db, a.ctx, {
+      name: 'Wanjiru',
+      phone: '0712345678',
+      email: 'wanjiru@mail.test',
+      role: 'cashier',
+      outletIds: [a.ktl],
+      tempPassword: TEMP_PASSWORD,
+    })
+    return { a, member }
+  }
+
+  it('is refused while still active elsewhere', async () => {
+    const { member } = await leaver()
+    const b = await setup(['NRB'])
+    await expect(
+      createStaff(db, b.ctx, { name: 'W', phone: '0712345678', role: 'cashier', outletIds: [b.ktl], tempPassword: TEMP_PASSWORD }),
+    ).rejects.toMatchObject({ code: 'conflict', message: 'That person works at another business. They must be removed there first.' })
+    expect((await db.select().from(memberships).where(eq(memberships.userId, member.userId))).length).toBe(1)
+  })
+
+  it('joins a new business once deactivated at the old one, as the same person', async () => {
+    const { a, member } = await leaver()
+    await deactivateStaff(db, a.ctx, member.membershipId)
+    const b = await setup(['NRB'])
+    const joined = await createStaff(db, b.ctx, {
+      name: 'Wanjiru K',
+      phone: '+254 712 345 678',
+      role: 'manager',
+      outletIds: [b.ktl],
+      tempPassword: 'new-temp-pass-99',
+    })
+    expect(joined.userId).toBe(member.userId)
+    expect(joined).toMatchObject({ name: 'Wanjiru K', email: 'wanjiru@mail.test', role: 'manager', active: true })
+    // The new business's temporary password works; the tenant is the new business.
+    const r = await login(db, { identifier: '0712345678', password: 'new-temp-pass-99' })
+    expect(r).toMatchObject({ ok: true, mustChangePassword: true })
+    expect((await getTenantCtx(db, member.userId))?.businessId).toBe(b.businessId)
+    // The old business still sees them, inactive.
+    expect((await listStaff(db, a.ctx)).find((m) => m.userId === member.userId)?.active).toBe(false)
+    const [audit] = await db.select().from(auditLog).where(eq(auditLog.entityId, joined.membershipId))
+    expect(audit.data).toMatchObject({ rehired: true })
+  })
+
+  it('cannot be reactivated at the old business while active at the new one', async () => {
+    const { a, member } = await leaver()
+    await deactivateStaff(db, a.ctx, member.membershipId)
+    const b = await setup(['NRB'])
+    await createStaff(db, b.ctx, { name: 'W', phone: '0712345678', role: 'cashier', outletIds: [b.ktl], tempPassword: TEMP_PASSWORD })
+    await expect(reactivateStaff(db, a.ctx, member.membershipId)).rejects.toMatchObject({
+      code: 'conflict',
+      message: 'That person now works at another business.',
+    })
+  })
+
+  it('points a former employee back to reactivation at the same business', async () => {
+    const { a, member } = await leaver()
+    await deactivateStaff(db, a.ctx, member.membershipId)
+    await expect(
+      createStaff(db, a.ctx, { name: 'W', phone: '0712345678', role: 'cashier', outletIds: [a.ktl], tempPassword: TEMP_PASSWORD }),
+    ).rejects.toMatchObject({ code: 'conflict' })
+  })
+
+  it('refuses contact details that belong to two people or contradict each other', async () => {
+    const { a, member } = await leaver()
+    await deactivateStaff(db, a.ctx, member.membershipId)
+    const b = await setup(['NRB'])
+    await expect(
+      createStaff(db, b.ctx, {
+        name: 'W',
+        phone: '0712345678',
+        email: 'someone-else@mail.test',
+        role: 'cashier',
+        outletIds: [b.ktl],
+        tempPassword: TEMP_PASSWORD,
+      }),
+    ).rejects.toMatchObject({ code: 'conflict' })
+    // The phone is Wanjiru's, the email is A's owner's: two different people.
+    const [ownerA] = await db.select({ email: users.email }).from(users).where(eq(users.id, a.owner.userId))
+    await expect(
+      createStaff(db, b.ctx, {
+        name: 'W',
+        phone: '0712345678',
+        email: ownerA.email!,
+        role: 'cashier',
+        outletIds: [b.ktl],
+        tempPassword: TEMP_PASSWORD,
+      }),
+    ).rejects.toMatchObject({ code: 'conflict' })
+  })
+})
+
+describe('setPin verifier', () => {
+  beforeEach(resetDb)
+
+  it('stores an offline verifier of the same PIN', async () => {
+    const { ctx, ktl } = await setup()
+    const { member } = await hire(ctx, 'cashier', [ktl])
+    await setPin(db, ctx, member.membershipId, '4821')
+    const [m] = await db.select().from(memberships).where(eq(memberships.id, member.membershipId))
+    const { checkPin } = await import('@/domain/pin')
+    expect(await checkPin('4821', { salt: m.pinSalt!, verifier: m.pinVerifier! })).toBe(true)
+  })
+})
