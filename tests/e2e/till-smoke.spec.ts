@@ -105,4 +105,14 @@ test('a till is set up, sells offline, syncs, and unlocks with a PIN', async ({ 
   await page.getByRole('tab', { name: 'Orders' }).click()
   await expect(page.getByText('KTL-01-000001')).toBeVisible()
   await context.setOffline(false)
+
+  // The owner (still signed in on the web) sees the till and the synced sale in admin.
+  await page.goto('/admin/devices')
+  await expect(page.getByText('KTL-01')).toBeVisible()
+  await expect(page.getByText('Front counter')).toBeVisible()
+  await page.goto('/admin/orders')
+  await page.getByRole('link', { name: 'KTL-01-000001' }).click()
+  await expect(page.getByRole('heading', { name: 'KTL-01-000001', level: 1 })).toBeVisible()
+  await expect(page.getByText('Paid.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Collected.', { exact: true })).toBeVisible()
 })

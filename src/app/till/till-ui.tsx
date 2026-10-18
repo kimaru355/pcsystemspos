@@ -5,17 +5,13 @@ import { Dialog } from '@base-ui/react/dialog'
 import { X } from 'lucide-react'
 import { cn } from 'cn'
 import { formatQty, parseMoney, parseQty, type Cents, type Milli } from '@/domain/money'
+import { unitLabel } from '@/domain/units'
 
 /* Small building blocks shared by the till screens. */
 
 export const ONE = 1000 // one unit, in thousandths
 
-// Abbreviated units read the same in the plural: 2 kg, 960 ft.
-const INVARIANT_UNITS = new Set(['kg', 'g', 'ft', 'm', 'mm', 'l', 'ml'])
-
-export function units(qtyMilli: number, unit: string): string {
-  return qtyMilli === ONE || INVARIANT_UNITS.has(unit.toLowerCase()) ? unit : `${unit}s`
-}
+export const units = unitLabel
 
 export function qtyText(qtyMilli: Milli, unit: string): string {
   return `${formatQty(qtyMilli)} ${units(qtyMilli, unit)}`

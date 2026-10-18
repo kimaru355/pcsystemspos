@@ -38,7 +38,7 @@ export const NAV: Record<NavKey, { root: string; label: string; groups: NavGroup
         label: 'Daily',
         items: [
           { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-          { href: '/admin/orders', label: 'Orders', icon: ReceiptText, soon: true },
+          { href: '/admin/orders', label: 'Orders', icon: ReceiptText },
           { href: '/admin/payments', label: 'Payments', icon: Banknote, soon: true },
           { href: '/admin/customers', label: 'Customers', icon: Users, soon: true },
         ],
@@ -55,7 +55,7 @@ export const NAV: Record<NavKey, { root: string; label: string; groups: NavGroup
         items: [
           { href: '/admin/outlets', label: 'Outlets', icon: Store },
           { href: '/admin/staff', label: 'Staff', icon: UserCog },
-          { href: '/admin/devices', label: 'Devices', icon: Smartphone, soon: true },
+          { href: '/admin/devices', label: 'Tills', icon: Smartphone },
           { href: '/admin/reports', label: 'Reports', icon: ChartColumn, soon: true },
           { href: '/admin/audit', label: 'Audit log', icon: ScrollText, soon: true },
           { href: '/admin/settings', label: 'Settings', icon: Settings, soon: true },
