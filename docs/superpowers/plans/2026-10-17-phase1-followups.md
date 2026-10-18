@@ -107,3 +107,48 @@ depends on it. Read this when writing the next phase's plan.
 - The overview "Add items and prices" step is never marked done.
 - Small accessibility items: no `aria-live` announcement after a form remounts,
   `aria-controls` pointing at closed panels, no live region while importing.
+
+---
+
+# Phases 3–5 — Follow-ups (till, sync, orders, connection modes)
+
+## Resolved in Phases 3–5
+
+- A worker moving between businesses: one active membership per person; a person with only
+  inactive memberships can be added by another business (same person, new temporary password).
+- Composite `(business_id, …)` foreign keys on membership_outlets, outlet_stock, stock_movements,
+  item_packs, item_barcodes; the ledger is append-only in the database; the Phase 2 indexes.
+- Device credentials separate from user sessions; `audit_log` has `device_id`, `occurred_at`,
+  `op_id`; every sync input is parsed with zod (uuids included).
+- Catalog pull: full sections with content hashes (no cursor or tombstones needed).
+- `checkCollection`: empty request, optional stock check, `Map` on-hand, pinned check order.
+- Staff choose their own PIN at their first till sign-in (after their password).
+- Pack → base conversion is exact (packs sell in whole numbers); `owedMilliFor` is a real query.
+- The overview's "Add items and prices" step is marked done.
+
+## Before Phase 6 (M-Pesa)
+
+- Payments table already has `method = 'mpesa'`; STK and C2B add a `mpesa_requests` table and a
+  `payment.add` path the server creates itself (not a till op).
+- An unmatched-payment attach is an online admin/till action, not an outbox op.
+
+## Before Phase 8 (go-live)
+
+- **PIN verifiers on devices.** Every till holds the PBKDF2 verifiers of the people allowed at its
+  outlet (owners and managers included, for approvals). A copied device storage allows an offline
+  brute force of 4–6 digit PINs. Revoke lost devices; consider per-device verifiers, or limiting
+  approver verifiers to people who signed in on that till.
+- `lowStockCounts` still runs one stock query per outlet.
+- `salesSince` loads every order of the day into memory; push the sums into SQL with the reports.
+- Rejected sync ops are stored with their payload but have no admin screen yet (only the till
+  shows them). Add them to the audit log viewer.
+- The till keeps the last 2 days of closed orders; receipts (Phase 7) need reprint of older ones.
+- Approval PIN attempts on the till are limited in memory only (per approval dialog).
+
+## Polish
+
+- A till re-registered to a different outlet sends its old outlet's unsynced sales, which the
+  server rejects (kept in `sync_ops`). Re-registering to the same outlet is fine.
+- Order lines take name, unit and VAT from the server's catalog at sync time, while price and floor
+  come from what the till showed; a pack resized between pull and sale moves the new size.
+- Payments tab on the till is a placeholder until M-Pesa.

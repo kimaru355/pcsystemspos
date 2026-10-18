@@ -60,9 +60,20 @@ export function SetupScreen({ engine, refused }: { engine: TillEngine; refused: 
 
   return (
     <TillCard
-      title={refused === 'revoked' ? 'This till was revoked' : 'Set up this device as a till'}
+      title={
+        refused === 'revoked'
+          ? 'This till was revoked'
+          : refused === 'suspended'
+            ? 'This business is suspended'
+            : 'Set up this device as a till'
+      }
       footer={<ConnectionStatus />}
     >
+      {refused === 'suspended' && (
+        <p className="text-sm text-muted-foreground">
+          The platform suspended this business. Sales on this device are kept and sent once it is active again.
+        </p>
+      )}
       {refused === 'revoked' && (
         <p className="text-sm text-muted-foreground">
           An owner or manager revoked this till. Its unsynced sales are still on this device and are sent as soon as

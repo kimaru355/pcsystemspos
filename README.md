@@ -2,7 +2,9 @@
 
 Multi-tenant point of sale and stock management for hardware shops. Next.js (App Router), TypeScript, Drizzle ORM and PostgreSQL.
 
-Currency is KES, stored as integer cents. Phase 1 covers sign-in, businesses, outlets and staff.
+Currency is KES, stored as integer cents. Built so far (see `docs/superpowers/plans/2026-10-17-mvp-roadmap.md`):
+sign-in, businesses, outlets and staff; the catalog and stock; the offline-first till with its sync
+engine; orders, payments and collections; and connection modes.
 
 ## Prerequisites
 
@@ -50,6 +52,15 @@ Currency is KES, stored as integer cents. Phase 1 covers sign-in, businesses, ou
    ```
 
    Platform admins sign in and land on `/platform`; business users land on `/admin`.
+
+6. Set up a till. On the phone or PC that will sell, sign in as an owner or manager and open
+   <http://localhost:3000/till>. Pick the outlet and name the till. Each person then signs in on
+   that till once, online, with their password and PIN (someone without a PIN chooses one there);
+   after that the PIN opens the till without internet.
+
+   The till works offline from the start of a session. To open it with no network after a reload,
+   it needs the service worker, which is only registered in a production build
+   (`npm run build && npm start`) served over HTTPS or on `localhost`.
 
 ## Tests
 

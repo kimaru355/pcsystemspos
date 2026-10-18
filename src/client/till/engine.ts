@@ -172,7 +172,9 @@ export class TillEngine {
         ? f.code
         : status.refused
     await this.db.setKv('sync', { ...status, lastError: f.message, refused })
-    if (refused) return // nothing will change until someone registers the till again
+    // A revoked or unknown till waits for someone to register it again; a suspended business may
+    // be reactivated, so that one keeps retrying.
+    if (refused === 'revoked' || refused === 'unregistered') return
     this.backoffMs = Math.min(Math.max(this.backoffMs * 2, BACKOFF_MIN_MS), BACKOFF_MAX_MS)
     if (this.retryTimer) clearTimeout(this.retryTimer)
     this.retryTimer = setTimeout(() => void this.syncNow(), this.backoffMs)
@@ -183,7 +185,7 @@ export class TillEngine {
     const device = await this.db.getKv('device')
     if (!device) return 0
     const status = await this.db.getKv('sync')
-    if (status?.refused) return 0
+    if (status?.refused === 'revoked' || status?.refused === 'unregistered') return 0
     const pending = await this.db.outbox.orderBy('seq').limit(BATCH).toArray()
     const sections = await this.db.sections.toArray()
     const hashes = Object.fromEntries(sections.map((s) => [s.name, s.hash]))
@@ -259,8 +261,10 @@ export class TillEngine {
   /** Register this browser as a till (an owner or manager is signed in on the web). */
   async register(outletId: string, name: string): Promise<void> {
     const r = await postJson<{ token: string; deviceId: string; code: string }>('/api/till/register', { outletId, name })
-    // A browser registered again keeps its outbox and orders; only the credential changes.
+    // A browser registered again keeps its outbox; the old till's settings go, so no sale is
+    // numbered with the old till's code until the new one's settings arrive.
     await this.db.transaction('rw', [this.db.kv, this.db.sections], async () => {
+      await this.db.kv.delete('settings')
       await this.db.setKv('device', { token: r.token, deviceId: r.deviceId, code: r.code })
       await this.db.setKv('sync', { lastSyncAt: null, lastError: null, refused: null })
       await this.db.setKv('orderSeq', 0)
