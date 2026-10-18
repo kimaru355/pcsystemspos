@@ -18,15 +18,25 @@ export type Action =
   | 'stock.receive'
   | 'stock.adjust'
   | 'stock.view'
+  | 'device.manage'
+  | 'order.sell'
+  | 'order.approve'
+  | 'order.view'
+  | 'order.cancel'
 
 const MANAGER_ACTIONS: readonly Action[] = [
   'staff.reset_pin',
   'stock.receive',
   'stock.adjust',
   'stock.view',
+  'device.manage',
+  'order.sell',
+  'order.approve',
+  'order.view',
+  'order.cancel',
 ]
 
-const CASHIER_ACTIONS: readonly Action[] = ['stock.view']
+const CASHIER_ACTIONS: readonly Action[] = ['stock.view', 'order.sell']
 
 /** Role-level check only. Outlet scope is enforced separately by the services. */
 export function can(role: Role, action: Action): boolean {

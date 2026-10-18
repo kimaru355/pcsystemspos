@@ -11,6 +11,11 @@ const matrix: Record<Role, Record<Action, boolean>> = {
     'stock.receive': true,
     'stock.adjust': true,
     'stock.view': true,
+    'device.manage': true,
+    'order.sell': true,
+    'order.approve': true,
+    'order.view': true,
+    'order.cancel': true,
   },
   manager: {
     'business.settings': false,
@@ -21,6 +26,11 @@ const matrix: Record<Role, Record<Action, boolean>> = {
     'stock.receive': true,
     'stock.adjust': true,
     'stock.view': true,
+    'device.manage': true,
+    'order.sell': true,
+    'order.approve': true,
+    'order.view': true,
+    'order.cancel': true,
   },
   cashier: {
     'business.settings': false,
@@ -31,6 +41,11 @@ const matrix: Record<Role, Record<Action, boolean>> = {
     'stock.receive': false,
     'stock.adjust': false,
     'stock.view': true,
+    'device.manage': false,
+    'order.sell': true,
+    'order.approve': false,
+    'order.view': false,
+    'order.cancel': false,
   },
 }
 

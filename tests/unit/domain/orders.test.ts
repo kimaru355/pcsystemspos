@@ -140,6 +140,58 @@ describe('checkCollection', () => {
     expect(r).toEqual({ ok: false, reason: 'exceeds_stock', lineId: 'B' })
   })
 
+  it('rejects an empty request', () => {
+    expect(check({ request: [] })).toEqual({ ok: false, reason: 'invalid_request', lineId: null })
+  })
+
+  it('skips the stock check when on-hand is null', () => {
+    expect(check({ onHandMilli: null, request: [{ lineId: 'L1', qtyMilli: 5000 }] })).toEqual({
+      ok: true,
+      valueCents: 375000,
+    })
+  })
+
+  it('accepts on-hand as a Map and ignores inherited keys', () => {
+    const line: OrderLine = { ...cement, itemId: 'toString' }
+    expect(
+      check({ lines: [line], onHandMilli: {}, request: [{ lineId: 'L1', qtyMilli: 1000 }] }),
+    ).toEqual({ ok: false, reason: 'exceeds_stock', lineId: 'L1' })
+    expect(
+      check({ onHandMilli: new Map([['cement', 5000]]), request: [{ lineId: 'L1', qtyMilli: 5000 }] }).ok,
+    ).toBe(true)
+  })
+
+  it('compares packs against stock in base units', () => {
+    // 2 bundles of 20 sheets need 40 sheets.
+    const bundle: OrderLine = { ...cement, qtyMilli: 2000, unitPriceCents: 1000, baseQtyPerUnitMilli: 20000 }
+    const req = [{ lineId: 'L1', qtyMilli: 2000 }]
+    expect(check({ lines: [bundle], paidCents: 2000, onHandMilli: { cement: 39000 }, request: req })).toEqual({
+      ok: false,
+      reason: 'exceeds_stock',
+      lineId: 'L1',
+    })
+    expect(check({ lines: [bundle], paidCents: 2000, onHandMilli: { cement: 40000 }, request: req }).ok).toBe(true)
+  })
+
+  it('checks in a fixed order: validity, outstanding, stock, then paid', () => {
+    // Over outstanding AND over stock AND unpaid: outstanding wins.
+    expect(
+      check({ paidCents: 0, onHandMilli: {}, request: [{ lineId: 'L1', qtyMilli: 6000 }] }),
+    ).toMatchObject({ reason: 'exceeds_outstanding' })
+    // Over stock AND unpaid: stock wins.
+    expect(check({ paidCents: 0, onHandMilli: {}, request: [{ lineId: 'L1', qtyMilli: 1000 }] })).toMatchObject({
+      reason: 'exceeds_stock',
+    })
+  })
+
+  it('treats cancelled quantity as no longer outstanding', () => {
+    const lines = [{ ...cement, cancelledMilli: 3000 }]
+    expect(check({ lines, request: [{ lineId: 'L1', qtyMilli: 3000 }] })).toMatchObject({
+      reason: 'exceeds_outstanding',
+    })
+    expect(orderTotals(lines).grossCents).toBe(150000)
+  })
+
   it.each([
     ['duplicate line', [{ lineId: 'L1', qtyMilli: 1000 }, { lineId: 'L1', qtyMilli: 1000 }], 'L1'],
     ['zero quantity', [{ lineId: 'L1', qtyMilli: 0 }], 'L1'],
