@@ -28,6 +28,8 @@ export const outlets = pgTable(
   },
   (t) => [
     unique('outlets_business_code_unique').on(t.businessId, t.code),
+    // target of composite (outlet, business) foreign keys
+    unique('outlets_id_business_unique').on(t.id, t.businessId),
     check('outlets_code_format', sql`${t.code} ~ '^[A-Z0-9]{2,5}$'`),
   ],
 )

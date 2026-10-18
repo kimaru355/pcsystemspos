@@ -73,15 +73,21 @@ describe('getTenantCtx', () => {
     const a = await seedBusiness({ outletCodes: ['MAIN'] })
     const b = await seedBusiness({ outletCodes: ['OTHR'] })
     const cashier = await addMember(a.businessId, 'cashier', [a.outletIds[0]])
-    // Bad row: the schema has no composite FK, so B's outlet can be linked under A's business.
-    await db.insert(membershipOutlets).values({
-      membershipId: cashier.membershipId,
-      outletId: b.outletIds[0],
-      businessId: a.businessId,
-    })
+    // The composite (outlet, business) foreign key refuses linking B's outlet under A's business.
+    const err = await db
+      .insert(membershipOutlets)
+      .values({
+        membershipId: cashier.membershipId,
+        outletId: b.outletIds[0],
+        businessId: a.businessId,
+      })
+      .then(
+        () => undefined,
+        (e: { cause?: { code?: string } }) => e,
+      )
+    expect(err?.cause?.code).toBe('23503')
     const ctx = await getTenantCtx(db, cashier.userId)
     expect(ctx?.outletScope).toEqual([a.outletIds[0]])
-    expect(ctx?.outletScope).not.toContain(b.outletIds[0])
   })
 
   it('excludes inactive outlets from the scope', async () => {

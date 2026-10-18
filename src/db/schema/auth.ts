@@ -1,6 +1,7 @@
 import {
   boolean,
   check,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
@@ -40,17 +41,23 @@ export const memberships = pgTable(
     businessId: uuid('business_id')
       .notNull()
       .references(() => businesses.id),
-    // unique: a user belongs to at most one business in the MVP
     userId: uuid('user_id')
       .notNull()
-      .unique()
       .references(() => users.id),
     role: role('role').notNull(),
     pinHash: text('pin_hash'),
+    /** PBKDF2 verifier of the same PIN, checkable offline by the till (see src/domain/pin.ts). */
+    pinSalt: text('pin_salt'),
+    pinVerifier: text('pin_verifier'),
     active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('memberships_business_id_idx').on(t.businessId)],
+  (t) => [
+    index('memberships_business_id_idx').on(t.businessId),
+    // A person is active in at most one business at a time; old memberships stay as history.
+    uniqueIndex('memberships_active_user_unique').on(t.userId).where(sql`${t.active}`),
+    index('memberships_user_id_idx').on(t.userId),
+  ],
 )
 
 export const membershipOutlets = pgTable(
@@ -70,6 +77,11 @@ export const membershipOutlets = pgTable(
   (t) => [
     primaryKey({ columns: [t.membershipId, t.outletId] }),
     index('membership_outlets_outlet_id_idx').on(t.outletId),
+    foreignKey({
+      name: 'membership_outlets_outlet_business_fk',
+      columns: [t.outletId, t.businessId],
+      foreignColumns: [outlets.id, outlets.businessId],
+    }),
   ],
 )
 

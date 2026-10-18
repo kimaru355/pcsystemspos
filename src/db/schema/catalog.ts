@@ -11,6 +11,7 @@ import {
   text,
   timestamp,
   unique,
+  index,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
@@ -112,6 +113,11 @@ export const items = pgTable(
       .where(sql`${t.sku} is not null`),
     check('items_floor_le_price', sql`${t.floorCents} >= 0 and ${t.floorCents} <= ${t.priceCents}`),
     check('items_low_stock_nonneg', sql`${t.lowStockMilli} is null or ${t.lowStockMilli} >= 0`),
+    // target of composite (item, business) foreign keys
+    unique('items_id_business_unique').on(t.id, t.businessId),
+    index('items_category_id_idx').on(t.categoryId),
+    index('items_brand_id_idx').on(t.brandId),
+    index('items_group_id_idx').on(t.groupId),
   ],
 )
 
@@ -138,6 +144,11 @@ export const itemPacks = pgTable(
     unique('item_packs_id_item_unique').on(t.id, t.itemId),
     check('item_packs_base_qty_positive', sql`${t.baseQtyMilli} > 0`),
     check('item_packs_floor_le_price', sql`${t.floorCents} >= 0 and ${t.floorCents} <= ${t.priceCents}`),
+    foreignKey({
+      name: 'item_packs_item_business_fk',
+      columns: [t.itemId, t.businessId],
+      foreignColumns: [items.id, items.businessId],
+    }),
   ],
 )
 
@@ -162,5 +173,11 @@ export const itemBarcodes = pgTable(
       columns: [t.packId, t.itemId],
       foreignColumns: [itemPacks.id, itemPacks.itemId],
     }),
+    foreignKey({
+      name: 'item_barcodes_item_business_fk',
+      columns: [t.itemId, t.businessId],
+      foreignColumns: [items.id, items.businessId],
+    }),
+    index('item_barcodes_item_id_idx').on(t.itemId),
   ],
 )

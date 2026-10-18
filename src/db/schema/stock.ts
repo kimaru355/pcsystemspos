@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import {
   bigint,
   check,
+  foreignKey,
   index,
   integer,
   pgEnum,
@@ -13,6 +14,8 @@ import {
 } from 'drizzle-orm/pg-core'
 import { users } from './auth'
 import { items } from './catalog'
+import { devices } from './devices'
+import { orderLines } from './orders'
 import { businesses, outlets } from './tenancy'
 
 export const movementKind = pgEnum('movement_kind', ['receive', 'adjust', 'collect'])
@@ -42,11 +45,11 @@ export const stockMovements = pgTable(
     unitCostCents: integer('unit_cost_cents'),
     reason: adjustReason('reason'),
     note: text('note'),
-    orderLineId: uuid('order_line_id'),
+    orderLineId: uuid('order_line_id').references(() => orderLines.id),
     actorUserId: uuid('actor_user_id')
       .notNull()
       .references(() => users.id),
-    deviceId: uuid('device_id'),
+    deviceId: uuid('device_id').references(() => devices.id),
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -64,6 +67,17 @@ export const stockMovements = pgTable(
       t.itemId,
       t.occurredAt,
     ),
+    index('stock_movements_order_line_id_idx').on(t.orderLineId).where(sql`${t.orderLineId} is not null`),
+    foreignKey({
+      name: 'stock_movements_outlet_business_fk',
+      columns: [t.outletId, t.businessId],
+      foreignColumns: [outlets.id, outlets.businessId],
+    }),
+    foreignKey({
+      name: 'stock_movements_item_business_fk',
+      columns: [t.itemId, t.businessId],
+      foreignColumns: [items.id, items.businessId],
+    }),
   ],
 )
 
@@ -82,5 +96,18 @@ export const outletStock = pgTable(
     onHandMilli: bigint('on_hand_milli', { mode: 'number' }).notNull().default(0),
     flaggedNegativeAt: timestamp('flagged_negative_at', { withTimezone: true }),
   },
-  (t) => [primaryKey({ columns: [t.outletId, t.itemId] })],
+  (t) => [
+    primaryKey({ columns: [t.outletId, t.itemId] }),
+    index('outlet_stock_item_id_idx').on(t.itemId),
+    foreignKey({
+      name: 'outlet_stock_outlet_business_fk',
+      columns: [t.outletId, t.businessId],
+      foreignColumns: [outlets.id, outlets.businessId],
+    }),
+    foreignKey({
+      name: 'outlet_stock_item_business_fk',
+      columns: [t.itemId, t.businessId],
+      foreignColumns: [items.id, items.businessId],
+    }),
+  ],
 )
