@@ -72,5 +72,7 @@ test('owner sets up an outlet and a cashier, who then reaches the till', async (
   await logIn(page, CASHIER_PHONE, CASHIER_TEMP_PASSWORD)
   await changePassword(page, CASHIER_TEMP_PASSWORD, CASHIER_NEW_PASSWORD)
   await expect(page).toHaveURL(/\/till$/)
-  await expect(page.getByRole('heading', { name: 'No items yet' })).toBeVisible()
+  // This browser is not a till yet, and only an owner or manager can set one up.
+  await expect(page.getByRole('heading', { name: 'Set up this device as a till' })).toBeVisible()
+  await expect(page.getByText('Only an owner or manager can set up a till.')).toBeVisible()
 })

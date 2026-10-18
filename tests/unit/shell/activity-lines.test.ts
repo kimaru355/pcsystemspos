@@ -206,3 +206,34 @@ describe('toConfirmation', () => {
     })
   })
 })
+
+describe('till and order lines', () => {
+  it('leads a till event with its outlet and number', () => {
+    const c = toConfirmation(
+      entry({ action: 'device.register', entityType: 'device', data: { outletCode: 'KTL', code: '03', name: 'Front counter' } }),
+      names,
+    )
+    expect(c).toMatchObject({ code: 'KTL-03', status: 'Till set up', detail: 'Front counter.' })
+  })
+
+  it('names the order, the amount and the reason for mark-paid', () => {
+    const c = toConfirmation(
+      entry({
+        action: 'order.mark_paid',
+        entityType: 'order',
+        reason: 'Bank transfer seen',
+        data: { number: 'KTL-03-000123', amountCents: 150000 },
+      }),
+      names,
+    )
+    expect(c).toMatchObject({ code: 'KTL-03-000123', status: 'Marked paid', tone: 'paid', detail: 'KES 1,500.00. Bank transfer seen' })
+  })
+
+  it('shows credit in the credit tone', () => {
+    const c = toConfirmation(
+      entry({ action: 'order.credit', entityType: 'order', data: { number: 'KTL-03-000124', creditCents: 28000 } }),
+      names,
+    )
+    expect(c).toMatchObject({ status: 'Credit approved', tone: 'credit', detail: 'KES 280.00 of goods taken before payment.' })
+  })
+})

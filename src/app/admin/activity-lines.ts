@@ -1,6 +1,6 @@
 import { MODE_LABELS, type ConnectionMode } from '@/domain/connection-modes'
 import { ADJUST_REASON_LABELS, type AdjustReason } from '@/domain/stock'
-import { formatQty } from '@/domain/money'
+import { formatKes, formatQty } from '@/domain/money'
 import { ROLE_LABELS, type Role } from '@/domain/permissions'
 import type { Confirmation } from '@/components/shell/confirmation-line'
 import type { ActivityEntry } from '@/server/services/activity'
@@ -151,13 +151,48 @@ function catalogConfirmation(e: ActivityEntry, data: Record<string, unknown>, na
   }
 }
 
+/** Confirmation line for till and order audit actions; null for any other action. */
+function tillConfirmation(e: ActivityEntry, data: Record<string, unknown>): Confirmation | null {
+  const by = e.actorName
+  const at = e.at
+  const number = text(data.number, 'ORDER')
+  const kes = (v: unknown) => (typeof v === 'number' ? formatKes(v) : '')
+  switch (e.action) {
+    case 'device.register':
+      return { code: `${text(data.outletCode, '')}-${text(data.code, '')}`, status: 'Till set up', detail: `${text(data.name, 'A till')}.`, by, at }
+    case 'device.revoke':
+      return { code: `TILL-${text(data.code, '')}`, status: 'Till revoked', detail: `${text(data.name, 'A till')} can no longer sync.`, by, at }
+    case 'order.mark_paid':
+      return { code: number, status: 'Marked paid', tone: 'paid', detail: `${kes(data.amountCents)}. ${e.reason ?? ''}`.trim(), by, at }
+    case 'order.credit':
+      return { code: number, status: 'Credit approved', tone: 'credit', detail: `${kes(data.creditCents)} of goods taken before payment.`, by, at }
+    case 'order.price_override':
+      return {
+        code: number,
+        status: 'Price below lowest',
+        tone: 'owed',
+        detail: `${text(data.itemName, 'An item')} at ${kes(data.unitPriceCents)} (lowest ${kes(data.floorCents)}).`,
+        by,
+        at,
+      }
+    case 'order.over_collected':
+      return { code: number, status: 'Collected beyond paid', tone: 'credit', detail: 'Two tills handed over goods against the same payment. Check the order.', by, at }
+    case 'order.cancel_remainder':
+      return { code: number, status: 'Remainder cancelled', tone: 'owed', detail: `${e.reason ?? ''}`, by, at }
+    case 'order.refund':
+      return { code: number, status: 'Refunded', tone: 'owed', detail: `${kes(data.amountCents)}. ${e.reason ?? ''}`.trim(), by, at }
+    default:
+      return null
+  }
+}
+
 /** Turns an audit row into a confirmation line: code first, then what happened. */
 export function toConfirmation(e: ActivityEntry, names: Names): Confirmation {
   const data = rec(e.data)
   const by = e.actorName
   const at = e.at
 
-  const catalog = catalogConfirmation(e, data, names)
+  const catalog = catalogConfirmation(e, data, names) ?? tillConfirmation(e, data)
   if (catalog) return catalog
 
   if (e.entityType === 'outlet') {
@@ -197,6 +232,8 @@ export function toConfirmation(e: ActivityEntry, names: Names): Confirmation {
         }
       case 'staff.set_pin':
         return { code, status: 'Till PIN set', detail: `for ${person}.`, by, at }
+      case 'staff.set_own_pin':
+        return { code, status: 'Till PIN chosen', detail: `by ${person} at first sign-in on a till.`, by, at }
       case 'staff.deactivate':
         return { code, status: 'Staff deactivated', detail: `${person} can no longer sign in.`, by, at }
       case 'staff.reactivate':

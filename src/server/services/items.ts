@@ -789,3 +789,13 @@ export async function removeBarcode(db: Db, ctx: TenantCtx, barcodeId: string): 
     })
   })
 }
+
+/** Whether the business has at least one active item (for the getting-started steps). */
+export async function hasActiveItems(db: Db, ctx: TenantCtx): Promise<boolean> {
+  const [row] = await db
+    .select({ id: items.id })
+    .from(items)
+    .where(and(eq(items.businessId, ctx.businessId), eq(items.active, true)))
+    .limit(1)
+  return !!row
+}

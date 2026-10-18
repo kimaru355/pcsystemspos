@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ChevronRight, Circle, CircleCheck } from 'lucide-react'
 import { cn } from 'cn'
 import { db } from '@/db/client'
+import { formatKes } from '@/domain/money'
 import { can } from '@/domain/permissions'
 import { ConfirmationThread, type Confirmation } from '@/components/shell/confirmation-line'
 import { PageHeader } from '@/components/shell/page-header'
@@ -10,6 +11,9 @@ import { Region } from '@/components/shell/region'
 import { SettlementBar } from '@/components/shell/settlement-bar'
 import { readOutletFilter } from '@/server/outlet-filter'
 import { listRecentActivity } from '@/server/services/activity'
+import { listDevices } from '@/server/services/devices'
+import { hasActiveItems } from '@/server/services/items'
+import { salesSince } from '@/server/services/orders'
 import { listOutlets } from '@/server/services/outlets'
 import { listStaff } from '@/server/services/staff'
 import { lowStockCounts } from '@/server/services/stock'
@@ -32,6 +36,12 @@ export default function AdminOverviewPage() {
 }
 
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' })
+
+/** Midnight in Nairobi (UTC+3 all year) of the day `now` falls on. */
+function startOfNairobiDay(now: Date): Date {
+  const [y, m, d] = dayKey.format(now).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d) - 3 * 60 * 60 * 1000)
+}
 const dayLabel = new Intl.DateTimeFormat('en-KE', {
   weekday: 'long',
   day: 'numeric',
@@ -54,6 +64,14 @@ async function OverviewContent() {
   const active = outlets.filter((o) => o.active)
   const filter = await readOutletFilter(active.map((o) => o.id))
   const scoped = filter === 'all' ? null : active.find((o) => o.id === filter)
+  const [sales, devices, hasItems] = await Promise.all([
+    salesSince(db, ctx, startOfNairobiDay(new Date()), scoped?.id ?? null),
+    listDevices(db, ctx),
+    hasActiveItems(db, ctx),
+  ])
+  const tillsToCheck = devices.filter(
+    (d) => !d.revokedAt && (d.pastReminder || d.clockJumps > 0) && (!scoped || d.outletId === scoped.id),
+  )
 
   const lowRows = lowStock
     .filter((l) => !scoped || l.outletId === scoped.id)
@@ -100,7 +118,18 @@ async function OverviewContent() {
       detail: tillStaff.length > 0 ? `${withPin} of ${tillStaff.length} set` : 'After adding staff',
       href: '/admin/staff',
     },
-    { done: false, label: 'Add items and prices', detail: 'Add or import your items', href: '/admin/items' },
+    {
+      done: hasItems,
+      label: 'Add items and prices',
+      detail: hasItems ? 'Items are in the catalog' : 'Add or import your items',
+      href: '/admin/items',
+    },
+    {
+      done: devices.some((d) => !d.revokedAt),
+      label: 'Set up a till',
+      detail: 'Open the till on the selling device',
+      href: '/till',
+    },
   ]
   const remaining = steps.filter((s) => !s.done).length
 
@@ -146,14 +175,55 @@ async function OverviewContent() {
         </Region>
 
         <div className="flex flex-col gap-10">
-          <Region id="money-heading" title="Money and goods today">
-            <SettlementBar total={0} paid={0} collected={0} />
-            <p className="text-sm text-foreground">No sales yet today.</p>
+          <Region
+            id="money-heading"
+            title="Money and goods today"
+            aside={
+              <Link href="/admin/orders" className="text-xs text-primary underline-offset-4 hover:underline">
+                All orders
+              </Link>
+            }
+          >
+            <SettlementBar total={sales.totalCents} paid={sales.paidCents} collected={sales.collectedValueCents} />
+            {sales.orders === 0 ? (
+              <p className="text-sm text-foreground">No sales yet today.</p>
+            ) : (
+              <p className="figures mt-2 text-sm text-foreground">
+                {sales.orders} {sales.orders === 1 ? 'order' : 'orders'} worth {formatKes(sales.totalCents)}
+                {sales.owedCents > 0 && <span className="text-owed-ink">, {formatKes(sales.owedCents)} still owed</span>}.
+              </p>
+            )}
             <p className="mt-1 text-sm text-muted-foreground">
-              Once the till takes orders, this shows what was paid, what customers collected and what is
-              still owed across {scoped ? scoped.name : 'your outlets'}.
+              Orders taken today across {scoped ? scoped.name : 'your outlets'}, once the tills have synced.
             </p>
           </Region>
+
+          {tillsToCheck.length > 0 && (
+            <Region
+              id="tills-heading"
+              title="Tills to check"
+              size="sm"
+              aside={
+                <Link href="/admin/devices" className="text-xs text-primary underline-offset-4 hover:underline">
+                  All tills
+                </Link>
+              }
+            >
+              <ul className="divide-y divide-rule">
+                {tillsToCheck.map((d) => (
+                  <li key={d.id} className="flex items-baseline gap-3 py-1.5 text-sm">
+                    <span className="font-mono text-[0.8rem] font-medium">
+                      {d.outletCode}-{d.code}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{d.name}</span>
+                    <span className="text-xs font-medium text-owed-ink">
+                      {d.pastReminder ? 'Not synced for a while' : 'Clock changed'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Region>
+          )}
 
           <Region
             id="low-stock-heading"

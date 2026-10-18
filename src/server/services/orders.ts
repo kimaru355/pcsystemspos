@@ -763,3 +763,41 @@ export async function recordRefund(
     })
   })
 }
+
+export type SalesSummary = {
+  orders: number
+  totalCents: Cents
+  paidCents: Cents
+  collectedValueCents: Cents
+  owedCents: Cents
+}
+
+/** Orders taken since `since` at the outlets in scope (one outlet when given), summed. */
+export async function salesSince(db: Db, ctx: TenantCtx, since: Date, outletId: string | null): Promise<SalesSummary> {
+  assertCan(ctx, 'order.view')
+  const empty = { orders: 0, totalCents: 0, paidCents: 0, collectedValueCents: 0, owedCents: 0 }
+  if (ctx.outletScope !== 'all' && ctx.outletScope.length === 0) return empty
+  const rows = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.businessId, ctx.businessId),
+        sql`${orders.occurredAt} >= ${since}`,
+        ctx.outletScope === 'all' ? undefined : inArray(orders.outletId, ctx.outletScope),
+        outletId ? eq(orders.outletId, outletId) : undefined,
+      ),
+    )
+    .limit(5000)
+  const states = await loadOrderStates(db, ctx.businessId, rows.map((r) => r.id), { events: false })
+  const out = { ...empty }
+  for (const { state } of states.values()) {
+    const f = orderFigures(state)
+    out.orders += 1
+    out.totalCents += f.totalCents
+    out.paidCents += f.paidCents
+    out.collectedValueCents += f.collectedValueCents
+    out.owedCents += Math.max(0, f.balanceCents)
+  }
+  return out
+}
