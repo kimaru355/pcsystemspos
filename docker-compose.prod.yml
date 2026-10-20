@@ -1,0 +1,106 @@
+# Production on one VPS: app, Postgres, Caddy (HTTPS), a cron caller and nightly backups.
+# Usage: see docs/deploy.md.  docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://pos:${POSTGRES_PASSWORD}@db:5432/pos
+  APP_URL: https://${DOMAIN}
+  SECRETS_KEY: ${SECRETS_KEY}
+  CRON_SECRET: ${CRON_SECRET}
+  MPESA_CALLBACK_IPS: ${MPESA_CALLBACK_IPS:-}
+  AT_USERNAME: ${AT_USERNAME:-}
+  AT_API_KEY: ${AT_API_KEY:-}
+  AT_SENDER_ID: ${AT_SENDER_ID:-}
+  AT_SANDBOX: ${AT_SANDBOX:-false}
+  SMTP_URL: ${SMTP_URL:-}
+  MAIL_FROM: ${MAIL_FROM:-}
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: pos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pos -d pos']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build: { context: ., target: build }
+    image: pos-tools
+    command: ['node', 'scripts/migrate.mjs']
+    environment: *app-env
+    depends_on:
+      db: { condition: service_healthy }
+
+  app:
+    build: { context: ., target: runner }
+    image: pos-app
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+
+  # Background jobs: message delivery, STK timeouts, the daily low-stock email, purges.
+  cron:
+    image: curlimages/curl:8.10.1
+    restart: unless-stopped
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        while true; do
+          curl -fsS -m 50 -X POST -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/internal/cron > /dev/null || echo "cron call failed"
+          sleep 60
+        done
+    depends_on: [app]
+
+  # Nightly pg_dump, 14 days kept, in ./backups on the host. Copy them off the server too.
+  backup:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        while true; do
+          pg_dump -h db -U pos -d pos -Fc -f /backups/pos-$$(date +%Y%m%d-%H%M).dump && echo "backup done"
+          find /backups -name 'pos-*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      db: { condition: service_healthy }
+
+  # One-off commands: docker compose -f docker-compose.prod.yml run --rm tools npm run platform -- ...
+  tools:
+    image: pos-tools
+    profiles: ['tools']
+    environment: *app-env
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

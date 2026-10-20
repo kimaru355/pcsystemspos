@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/client'
-import { businesses, memberships, outlets, users } from '@/db/schema'
+import { auditLog, businesses, memberships, outlets, users } from '@/db/schema'
 import { login } from '@/server/auth/login'
 import { DomainError } from '@/server/errors'
-import { createBusinessWithOwner, createPlatformAdmin, listBusinesses } from '@/server/services/platform'
+import { createBusinessWithOwner, createPlatformAdmin, listBusinesses, platformAdminByEmail } from '@/server/services/platform'
 import { resetDb } from '../helpers/db'
 
 describe('createBusinessWithOwner', () => {
@@ -106,7 +106,7 @@ describe('createPlatformAdmin', () => {
       password: 'admin-pass-1',
     })
     const [user] = await db.select().from(users).where(eq(users.id, userId))
-    expect(user).toMatchObject({ email: 'root@platform.test', isPlatformAdmin: true, mustChangePassword: false })
+    expect(user).toMatchObject({ email: 'root@platform.test', isPlatformAdmin: true, mustChangePassword: true })
     expect(await db.select().from(memberships).where(eq(memberships.userId, userId))).toHaveLength(0)
   })
 
@@ -147,5 +147,37 @@ describe('listBusinesses', () => {
       ['Alpha Hardware', 2, 1],
       ['Beta Hardware', 0, 1],
     ])
+  })
+})
+
+describe('platform audit', () => {
+  beforeEach(resetDb)
+
+  it('records who created an admin or a business, and refuses a non-admin actor', async () => {
+    const { userId: root } = await createPlatformAdmin(db, { name: 'Root', email: 'root@platform.test', password: 'admin-pass-1' })
+    const { userId: second } = await createPlatformAdmin(db, {
+      name: 'Second',
+      email: 'second@platform.test',
+      password: 'admin-pass-2',
+      actorUserId: await platformAdminByEmail(db, 'ROOT@platform.test'),
+    })
+    const { businessId, ownerUserId } = await createBusinessWithOwner(db, {
+      name: 'Audited Hardware',
+      ownerName: 'Owner',
+      ownerEmail: 'o@audited.test',
+      ownerPassword: 'temp-pass-1',
+      actorUserId: root,
+    })
+    const rows = await db.select().from(auditLog).orderBy(auditLog.seq)
+    expect(rows.map((r) => [r.action, r.actorUserId])).toEqual([
+      ['platform.create_admin', root],
+      ['platform.create_admin', root],
+      ['platform.create_business', root],
+    ])
+    expect(rows[1].entityId).toBe(second)
+    expect(rows[2].businessId).toBe(businessId)
+    await expect(
+      createBusinessWithOwner(db, { name: 'X', ownerName: 'X', ownerEmail: 'x@x.test', ownerPassword: 'temp-pass-1', actorUserId: ownerUserId }),
+    ).rejects.toMatchObject({ code: 'forbidden' })
   })
 })

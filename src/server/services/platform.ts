@@ -1,10 +1,11 @@
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { businesses, memberships, outlets, users } from '@/db/schema'
 import { normalizeKePhone } from '@/domain/phone'
 import { hashSecret } from '@/server/auth/secret'
 import { isUniqueViolation } from '@/server/db-errors'
 import { DomainError } from '@/server/errors'
+import { recordAudit } from './audit'
 
 const MIN_PASSWORD_LENGTH = 8
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -28,20 +29,52 @@ function requireEmail(value: string): string {
   return email
 }
 
-/** Platform admins are a flag on the user; they have no membership. */
+/** The acting platform admin, for audit rows (`--actor` on the CLI). */
+async function platformActor(db: Db, actorUserId: string | undefined): Promise<string | null> {
+  if (!actorUserId) return null
+  const [a] = await db.select({ id: users.id, admin: users.isPlatformAdmin }).from(users).where(eq(users.id, actorUserId))
+  if (!a?.admin) throw new DomainError('forbidden', 'The acting user is not a platform admin.')
+  return a.id
+}
+
+/** Look up a platform admin by email (for the CLI's `--actor`). */
+export async function platformAdminByEmail(db: Db, email: string): Promise<string> {
+  const [a] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(sql`lower(${users.email}) = ${email.trim().toLowerCase()}`, eq(users.isPlatformAdmin, true)))
+  if (!a) throw new DomainError('not_found', 'No platform admin has that email.')
+  return a.id
+}
+
+/**
+ * Platform admins are a flag on the user; they have no membership. The password is temporary:
+ * they change it at first sign-in.
+ */
 export async function createPlatformAdmin(
   db: Db,
-  i: { name: string; email: string; password: string },
+  i: { name: string; email: string; password: string; actorUserId?: string },
 ): Promise<{ userId: string }> {
   const name = requireText(i.name, 'Name')
   const email = requireEmail(i.email)
   const passwordHash = await hashSecret(requirePassword(i.password))
+  const actor = await platformActor(db, i.actorUserId)
   try {
-    const [user] = await db
-      .insert(users)
-      .values({ name, email, passwordHash, isPlatformAdmin: true })
-      .returning({ id: users.id })
-    return { userId: user.id }
+    return await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({ name, email, passwordHash, isPlatformAdmin: true, mustChangePassword: true })
+        .returning({ id: users.id })
+      await recordAudit(tx, {
+        businessId: null,
+        actorUserId: actor ?? user.id,
+        action: 'platform.create_admin',
+        entityType: 'user',
+        entityId: user.id,
+        data: { name, email, viaCli: true },
+      })
+      return { userId: user.id }
+    })
   } catch (e) {
     if (isUniqueViolation(e)) throw new DomainError('conflict', 'A user with that email already exists.')
     throw e
@@ -57,6 +90,7 @@ export async function createBusinessWithOwner(
     ownerEmail?: string
     ownerPhone?: string
     ownerPassword: string
+    actorUserId?: string
   },
 ): Promise<{ businessId: string; ownerUserId: string }> {
   const name = requireText(i.name, 'Business name')
@@ -73,6 +107,7 @@ export async function createBusinessWithOwner(
     if (!phone) throw new DomainError('invalid_input', 'Enter a valid Kenyan phone number.')
   }
   const passwordHash = await hashSecret(requirePassword(i.ownerPassword))
+  const actor = await platformActor(db, i.actorUserId)
 
   try {
     return await db.transaction(async (tx) => {
@@ -82,6 +117,16 @@ export async function createBusinessWithOwner(
         .values({ name: ownerName, email, phone, passwordHash, mustChangePassword: true })
         .returning({ id: users.id })
       await tx.insert(memberships).values({ businessId: business.id, userId: user.id, role: 'owner' })
+      if (actor) {
+        await recordAudit(tx, {
+          businessId: business.id,
+          actorUserId: actor,
+          action: 'platform.create_business',
+          entityType: 'business',
+          entityId: business.id,
+          data: { name, ownerName, ownerEmail: email, ownerPhone: phone },
+        })
+      }
       return { businessId: business.id, ownerUserId: user.id }
     })
   } catch (e) {
