@@ -17,6 +17,7 @@ const settings: TillSettings = {
   device: { id: 'd1', code: '03', name: 'Counter' },
   mode: 'default',
   lastOrderSeq: 7,
+  mpesa: false,
 }
 
 const catalog: CatalogSection = {

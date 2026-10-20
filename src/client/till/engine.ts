@@ -30,14 +30,17 @@ export class TillApiFailure extends Error {
 }
 
 async function postJson<T>(url: string, body: unknown, token?: string): Promise<T> {
+  return requestJson<T>(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  })
+}
+
+async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-    })
+    res = await fetch(url, { ...init, cache: 'no-store' })
   } catch {
     throw new TillApiFailure(0, 'offline', 'No connection to the server.')
   }
@@ -290,6 +293,60 @@ export class TillEngine {
     // Make sure the staff section (with this person's verifier) is current.
     await this.syncNow()
     return staff
+  }
+}
+
+export type StkView = {
+  id: string
+  status: 'pending' | 'success' | 'failed' | 'timeout'
+  amountCents: number
+  phone: string
+  message: string | null
+  receipt: string | null
+}
+
+export type UnmatchedPayment = {
+  id: string
+  transId: string
+  amountCents: number
+  payerName: string | null
+  msisdn: string | null
+  billRef: string | null
+  transTime: string
+}
+
+/** Online-only M-Pesa calls (STK push, unmatched payments). */
+export class TillMpesa {
+  constructor(private readonly engine: TillEngine) {}
+
+  private async token(): Promise<string> {
+    const device = await this.engine.db.getKv('device')
+    if (!device) throw new TillApiFailure(401, 'unregistered', 'This till is not registered.')
+    return device.token
+  }
+
+  /** Sync first so the order is on the server, then send the push. */
+  async push(orderId: string, phone: string, amountCents: number, actorId: string): Promise<StkView> {
+    await this.engine.syncNow()
+    return postJson<StkView>('/api/till/mpesa/stk', { orderId, phone, amountCents, actorId }, await this.token())
+  }
+
+  async status(id: string): Promise<StkView> {
+    return requestJson<StkView>(`/api/till/mpesa/stk/${id}`, { headers: { Authorization: `Bearer ${await this.token()}` } })
+  }
+
+  async unmatched(): Promise<UnmatchedPayment[]> {
+    const r = await requestJson<{ payments: UnmatchedPayment[] }>('/api/till/mpesa/unmatched', {
+      headers: { Authorization: `Bearer ${await this.token()}` },
+    })
+    return r.payments
+  }
+
+  async attach(transactionId: string, orderId: string, actorId: string): Promise<{ orderNumber: string }> {
+    await this.engine.syncNow()
+    const r = await postJson<{ orderNumber: string }>('/api/till/mpesa/attach', { transactionId, orderId, actorId }, await this.token())
+    void this.engine.syncNow()
+    return r
   }
 }
 

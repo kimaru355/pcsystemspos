@@ -18,6 +18,7 @@ import type { CatalogSection, SectionData, StockSection, SyncResponse, TillSetti
 import { DomainError } from '@/server/errors'
 import { recordAudit } from './audit'
 import type { DeviceAuth } from './devices'
+import { mpesaEnabledFor } from './mpesa'
 import { applyCollectionRecord, applyPaymentAdd, applySaleCheckout, ordersForTill, type OpContext } from './orders'
 import { insertMovementTx, lockStockTx } from './stock'
 import { isAllowedAtOutlet, membersById, staffForDevice } from './till-auth'
@@ -296,13 +297,14 @@ async function sectionData<S extends Section>(db: Db, device: DeviceAuth, s: S):
   throw new Error(`Unknown section ${String(s)}`)
 }
 
-function settingsOf(device: DeviceAuth, lastOrderSeq: number): TillSettings {
+function settingsOf(device: DeviceAuth, lastOrderSeq: number, mpesa: boolean): TillSettings {
   return {
     businessName: device.businessName,
     outlet: { id: device.outletId, code: device.outletCode, name: device.outletName, active: device.outletActive },
     device: { id: device.deviceId, code: device.code, name: device.name },
     mode: device.mode,
     lastOrderSeq,
+    mpesa,
   }
 }
 
@@ -336,7 +338,7 @@ export async function sync(db: Db, device: DeviceAuth, body: unknown, now = new 
   return {
     results,
     serverTime: now.toISOString(),
-    settings: settingsOf(device, updated?.lastOrderSeq ?? device.lastOrderSeq),
+    settings: settingsOf(device, updated?.lastOrderSeq ?? device.lastOrderSeq, await mpesaEnabledFor(db, device)),
     sections,
   }
 }

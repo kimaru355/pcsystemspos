@@ -57,6 +57,12 @@ export type OrderEvent = {
   method?: string
   creditGrantedCents?: Cents
   detail?: string
+  /** The payment or collection id (receipts are keyed by it). */
+  sourceId?: string
+  /** Collections: what was handed over, in sold units. */
+  lines?: { lineId: string; qtyMilli: Milli }[]
+  /** M-Pesa receipt number. */
+  reference?: string
   /** Not yet confirmed by the server (till only). */
   pending?: boolean
 }
@@ -269,7 +275,15 @@ export function applyPayment(
     ...order,
     paidCents: order.paidCents + p.amountCents,
     events: [
-      { kind: 'payment', at: ctx.at, by: ctx.by, amountCents: p.amountCents, method: p.method, detail: reason ?? undefined },
+      {
+        kind: 'payment',
+        at: ctx.at,
+        by: ctx.by,
+        amountCents: p.amountCents,
+        method: p.method,
+        detail: reason ?? undefined,
+        sourceId: p.id,
+      },
       ...order.events,
     ],
   }
@@ -356,7 +370,15 @@ export function applyCollection(
     creditCents: order.creditCents + creditGrantedCents,
     flagged: order.flagged || overCollected,
     events: [
-      { kind: 'collection', at: ctx.at, by: ctx.by, amountCents: valueCents, creditGrantedCents },
+      {
+        kind: 'collection',
+        at: ctx.at,
+        by: ctx.by,
+        amountCents: valueCents,
+        creditGrantedCents,
+        sourceId: c.id,
+        lines: c.lines.map((r) => ({ lineId: r.lineId, qtyMilli: r.qtyMilli })),
+      },
       ...order.events,
     ],
   }

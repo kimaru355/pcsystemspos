@@ -46,6 +46,7 @@ import type { RejectedRecord, SyncStatus } from '@/client/till/db'
 import type { TillEngine } from '@/client/till/engine'
 import type { TillView } from '@/client/till/view'
 import { ApproverDialog } from './till-access'
+import { MpesaPayForm, PaymentsPanel } from './till-mpesa'
 import {
   AmountField,
   ErrorText,
@@ -110,7 +111,7 @@ export function TillWorkspace({
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [done, setDone] = useState<{ number: string; text: string; tone: 'paid' | 'owed' | 'credit' | 'neutral' } | null>(null)
-  const [openOrder, setOpenOrder] = useState<string | null>(null)
+  const [openOrder, setOpenOrder] = useState<{ id: string; mode: OrderMode } | null>(null)
   const scanRef = useRef<HTMLInputElement>(null)
   const actor: Actor = { membershipId: person.membershipId, name: person.name, role: person.role }
   const blocked = level === 'blocked' || view.settings?.outlet.active === false
@@ -223,16 +224,13 @@ export function TillWorkspace({
           </div>
         </Tabs.Panel>
         <Tabs.Panel value="orders" className="flex min-h-0 flex-1 flex-col outline-none">
-          <OrdersPanel orders={view.orders} onOpen={setOpenOrder} />
+          <OrdersPanel orders={view.orders} onOpen={(id) => setOpenOrder({ id, mode: 'view' })} />
         </Tabs.Panel>
         <Tabs.Panel value="stock" className="flex min-h-0 flex-1 flex-col outline-none">
           <StockPanel tiles={tiles} engine={engine} actor={actor} />
         </Tabs.Panel>
         <Tabs.Panel value="payments" className="flex-1 overflow-y-auto outline-none">
-          <PanelEmpty
-            title="Payments to match"
-            body="M-Pesa payments that arrive without a matching order number will wait here for you to attach them. Cash and approved payments are taken from the order itself."
-          />
+          <PaymentsPanel engine={engine} view={view} actor={actor} />
         </Tabs.Panel>
 
         {/* Phones: the sale rides above the tab bar, total and Checkout under the thumb. */}
@@ -272,7 +270,8 @@ export function TillWorkspace({
           cartLines={cartLines}
           total={totals.grossCents}
           onClose={() => setCheckoutOpen(false)}
-          onDone={(order) => {
+          onDone={(order, viaMpesa) => {
+            if (viaMpesa) setOpenOrder({ id: order.id, mode: 'mpesa' })
             setCart([])
             setCheckoutOpen(false)
             setCartOpen(false)
@@ -296,7 +295,8 @@ export function TillWorkspace({
           engine={engine}
           view={view}
           actor={actor}
-          order={view.orders.find((o) => o.id === openOrder) ?? null}
+          order={view.orders.find((o) => o.id === openOrder.id) ?? null}
+          initialMode={openOrder.mode}
           onClose={() => setOpenOrder(null)}
         />
       )}
@@ -786,7 +786,7 @@ function CartRow({
 
 // ---------------------------------------------------------------- checkout
 
-type PayMethod = 'cash' | 'mark_paid' | 'later'
+type PayMethod = 'cash' | 'mark_paid' | 'mpesa' | 'later'
 
 function CheckoutDialog({
   engine,
@@ -803,7 +803,7 @@ function CheckoutDialog({
   cartLines: CartView[]
   total: number
   onClose: () => void
-  onDone: (order: OrderState) => void
+  onDone: (order: OrderState, viaMpesa: boolean) => void
 }) {
   const [method, setMethod] = useState<PayMethod>('cash')
   const [tendered, setTendered] = useState<number | null>(total)
@@ -818,12 +818,14 @@ function CheckoutDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const amount = method === 'later' ? 0 : Math.min(tendered ?? 0, total)
+  // M-Pesa is sent from the order once it exists: the sale is saved unpaid first.
+  const payLater = method === 'later' || method === 'mpesa'
+  const amount = payLater ? 0 : Math.min(tendered ?? 0, total)
   const change = method === 'cash' && tendered !== null && tendered > total ? tendered - total : 0
   const draft = {
     cart: cartLines.map((l) => l.cart),
     customer,
-    payment: method === 'later' ? null : { method, amountCents: amount, reason, approverId: markApprover },
+    payment: method === 'cash' || method === 'mark_paid' ? { method, amountCents: amount, reason, approverId: markApprover } : null,
     collect,
     creditApproverId: creditApprover,
   } as const
@@ -836,7 +838,7 @@ function CheckoutDialog({
     setError(null)
     const r = await checkout(engine, view, actor, draft)
     setBusy(false)
-    if (r.ok) onDone(r.order)
+    if (r.ok) onDone(r.order, method === 'mpesa')
     else setError(r.error.message)
   }
 
@@ -846,10 +848,11 @@ function CheckoutDialog({
       <div className="flex flex-col gap-5">
         <fieldset className="flex flex-col gap-3">
           <legend className={cn(labelClass, 'mb-2')}>Payment</legend>
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Payment method">
+          <div className={cn('grid gap-2', view.settings?.mpesa ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')} role="radiogroup" aria-label="Payment method">
             {(
               [
                 ['cash', 'Cash'],
+                ...(view.settings?.mpesa ? ([['mpesa', 'M-Pesa']] as const) : []),
                 ['mark_paid', 'Mark paid'],
                 ['later', 'Pay later'],
               ] as const
@@ -859,7 +862,11 @@ function CheckoutDialog({
                 type="button"
                 role="radio"
                 aria-checked={method === v}
-                onClick={() => setMethod(v)}
+                onClick={() => {
+                  setMethod(v)
+                  // Goods wait for the M-Pesa payment.
+                  if (v === 'mpesa') setCollect({})
+                }}
                 className={cn(
                   'h-11 rounded-md border text-sm font-medium',
                   method === v ? 'border-primary bg-primary/10 text-primary' : 'border-rule hover:bg-muted',
@@ -869,7 +876,12 @@ function CheckoutDialog({
               </button>
             ))}
           </div>
-          {method !== 'later' && (
+          {method === 'mpesa' && (
+            <p className="text-sm text-muted-foreground">
+              The sale is saved, then the M-Pesa request goes to the customer&apos;s phone. Hand over the goods once it is paid.
+            </p>
+          )}
+          {!payLater && (
             <AmountField
               key={method}
               id="co-amount"
@@ -1116,20 +1128,24 @@ function OrderList({ title, orders, onOpen }: { title: string; orders: OrderStat
   )
 }
 
+type OrderMode = 'view' | 'pay' | 'mpesa' | 'collect'
+
 function OrderDialog({
   engine,
   view,
   actor,
   order,
+  initialMode,
   onClose,
 }: {
   engine: TillEngine
   view: TillView
   actor: Actor
   order: OrderState | null
+  initialMode: OrderMode
   onClose: () => void
 }) {
-  const [mode, setMode] = useState<'view' | 'pay' | 'collect'>('view')
+  const [mode, setMode] = useState<OrderMode>(initialMode)
   if (!order) return null
   const f = orderFigures(order)
   return (
@@ -1164,10 +1180,15 @@ function OrderDialog({
         {mode === 'view' && (
           <>
             {(f.balanceCents > 0 || f.goodsOutstanding) && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className={cn('grid gap-2', view.settings?.mpesa ? 'grid-cols-3' : 'grid-cols-2')}>
                 <Button size="lg" className="h-11" disabled={f.balanceCents <= 0} onClick={() => setMode('pay')}>
                   Take payment
                 </Button>
+                {view.settings?.mpesa && (
+                  <Button size="lg" variant="outline" className="h-11" disabled={f.balanceCents <= 0} onClick={() => setMode('mpesa')}>
+                    M-Pesa
+                  </Button>
+                )}
                 <Button size="lg" variant="outline" className="h-11" disabled={!f.goodsOutstanding} onClick={() => setMode('collect')}>
                   Collect
                 </Button>
@@ -1182,6 +1203,11 @@ function OrderDialog({
               </ol>
             </section>
           </>
+        )}
+        {mode === 'mpesa' && (
+          <div className="border-t border-rule pt-3">
+            <MpesaPayForm engine={engine} actor={actor} order={order} onDone={() => setMode('view')} />
+          </div>
         )}
         {mode === 'pay' && <PayForm engine={engine} view={view} actor={actor} order={order} onDone={() => setMode('view')} />}
         {mode === 'collect' && <CollectForm engine={engine} view={view} actor={actor} order={order} onDone={() => setMode('view')} />}
@@ -1201,7 +1227,7 @@ function eventLine(number: string, e: OrderState['events'][number]) {
         ...base,
         status: e.method === 'mark_paid' ? 'Marked paid' : 'Paid',
         tone: 'paid' as const,
-        detail: `${formatKes(e.amountCents ?? 0)}${e.method === 'cash' ? ' cash' : ''}.${e.detail ? ` ${e.detail}.` : ''}${pending}`,
+        detail: `${formatKes(e.amountCents ?? 0)}${e.method === 'cash' ? ' cash' : e.method === 'mpesa' ? ' by M-Pesa' : ''}.${e.detail ? ` ${e.detail}.` : ''}${pending}`,
       }
     case 'refund':
       return { ...base, status: 'Refunded', tone: 'owed' as const, detail: `${formatKes(e.amountCents ?? 0)}.${pending}` }

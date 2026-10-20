@@ -72,6 +72,8 @@ export type TillSettings = {
   mode: ConnectionMode
   /** Highest order sequence the server has seen from this device. */
   lastOrderSeq: number
+  /** M-Pesa is set up for this outlet (STK push needs a connection all the same). */
+  mpesa: boolean
 }
 
 export type SyncResponse = {

@@ -1,4 +1,5 @@
 import { db } from '@/db/client'
+import { getEnv } from '@/env'
 import type { TillApiError } from '@/domain/till-data'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { DomainError, type DomainErrorCode } from '@/server/errors'
@@ -71,4 +72,20 @@ export async function withTenant(fn: (ctx: TenantCtx, userName: string) => Promi
   } catch (e) {
     return errorResponse(e)
   }
+}
+
+/**
+ * M-Pesa callbacks: when MPESA_CALLBACK_IPS is set, only those addresses (Safaricom's) may call.
+ * The app runs behind Caddy, which sets X-Forwarded-For.
+ */
+export function callbackAllowed(request: Request): boolean {
+  const list = getEnv().MPESA_CALLBACK_IPS
+  if (!list) return true
+  const ip = (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim()
+  return list.split(',').map((s) => s.trim()).includes(ip)
+}
+
+/** Safaricom expects this acknowledgement whatever happened on our side. */
+export function mpesaAck(): Response {
+  return Response.json({ ResultCode: 0, ResultDesc: 'Accepted' })
 }

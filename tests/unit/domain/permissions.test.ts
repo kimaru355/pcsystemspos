@@ -16,6 +16,9 @@ const matrix: Record<Role, Record<Action, boolean>> = {
     'order.approve': true,
     'order.view': true,
     'order.cancel': true,
+    'payment.match': true,
+    'report.view': true,
+    'audit.view': true,
   },
   manager: {
     'business.settings': false,
@@ -31,6 +34,9 @@ const matrix: Record<Role, Record<Action, boolean>> = {
     'order.approve': true,
     'order.view': true,
     'order.cancel': true,
+    'payment.match': true,
+    'report.view': true,
+    'audit.view': false,
   },
   cashier: {
     'business.settings': false,
@@ -46,6 +52,9 @@ const matrix: Record<Role, Record<Action, boolean>> = {
     'order.approve': false,
     'order.view': false,
     'order.cancel': false,
+    'payment.match': true,
+    'report.view': false,
+    'audit.view': false,
   },
 }
 

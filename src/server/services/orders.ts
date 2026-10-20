@@ -121,6 +121,21 @@ export async function loadOrderStates(
       : Promise.resolve([]),
   ])
 
+  const collectedLines =
+    opts.events && collectionRows.length > 0
+      ? await db
+          .select({ collectionId: collectionLines.collectionId, orderLineId: collectionLines.orderLineId, qtyMilli: collectionLines.qtyMilli })
+          .from(collectionLines)
+          .where(
+            and(
+              eq(collectionLines.businessId, businessId),
+              inArray(
+                collectionLines.collectionId,
+                collectionRows.map((c) => c.c.id),
+              ),
+            ),
+          )
+      : []
   const out = new Map<string, { state: OrderState; row: OrderRow }>()
   for (const { o, creatorName, cancellerName } of orderRows) {
     const lines = lineRows
@@ -150,6 +165,8 @@ export async function loadOrderStates(
       for (const { p, actorName } of pays) {
         events.push({
           kind: p.kind,
+          sourceId: p.id,
+          ...(p.reference ? { reference: p.reference } : {}),
           at: p.occurredAt.toISOString(),
           // A paybill payment matched automatically has no person behind it.
           by: actorName ?? 'M-Pesa',
@@ -161,6 +178,8 @@ export async function loadOrderStates(
       for (const { c, actorName } of collectionRows.filter((c) => c.c.orderId === o.id)) {
         events.push({
           kind: 'collection',
+          sourceId: c.id,
+          lines: collectedLines.filter((l) => l.collectionId === c.id).map((l) => ({ lineId: l.orderLineId, qtyMilli: l.qtyMilli })),
           at: c.occurredAt.toISOString(),
           by: actorName,
           amountCents: c.valueCents,
@@ -200,7 +219,7 @@ export async function loadOrderStates(
 }
 
 /** Locks the order row and loads its state (no events). */
-async function lockOrderState(tx: Tx, businessId: string, orderId: string): Promise<{ state: OrderState; row: OrderRow }> {
+export async function lockOrderState(tx: Tx, businessId: string, orderId: string): Promise<{ state: OrderState; row: OrderRow }> {
   if (!isUuid(orderId)) throw new DomainError('not_found', 'That order was not found.')
   const [locked] = await tx
     .select({ id: orders.id })
@@ -801,4 +820,44 @@ export async function salesSince(db: Db, ctx: TenantCtx, since: Date, outletId: 
     out.owedCents += Math.max(0, f.balanceCents)
   }
   return out
+}
+
+/**
+ * Record a payment the server learned of itself (M-Pesa STK callback, paybill match, attaching an
+ * unmatched payment). Idempotent by the M-Pesa reference: a reference already recorded returns
+ * that payment's id and changes nothing. Runs inside the caller's transaction.
+ */
+export async function recordServerPayment(
+  tx: Tx,
+  businessId: string,
+  orderId: string,
+  p: { amountCents: Cents; reference: string; actorUserId: string | null; deviceId: string | null; occurredAt: Date },
+): Promise<{ paymentId: string; created: boolean }> {
+  const [existing] = await tx
+    .select({ id: payments.id })
+    .from(payments)
+    .where(and(eq(payments.businessId, businessId), eq(payments.reference, p.reference), eq(payments.kind, 'payment')))
+  if (existing) return { paymentId: existing.id, created: false }
+  const { state: before } = await lockOrderState(tx, businessId, orderId)
+  const paymentId = randomUUID()
+  const r = applyPayment(
+    before,
+    { id: paymentId, method: 'mpesa', amountCents: p.amountCents, reason: null, approverId: null },
+    { at: p.occurredAt.toISOString(), by: 'M-Pesa', isApprover: () => false },
+  )
+  if (!r.ok) ruleError(r.error)
+  await tx.insert(payments).values({
+    id: paymentId,
+    orderId,
+    businessId,
+    kind: 'payment',
+    method: 'mpesa',
+    amountCents: p.amountCents,
+    reference: p.reference,
+    actorUserId: p.actorUserId,
+    deviceId: p.deviceId,
+    occurredAt: p.occurredAt,
+  })
+  await persist(tx, businessId, before, r.order, p.occurredAt)
+  return { paymentId, created: true }
 }
