@@ -14,8 +14,11 @@ import { can } from '@/domain/permissions'
 import { unitLabel } from '@/domain/units'
 import { DomainError } from '@/server/errors'
 import { getOrder } from '@/server/services/orders'
+import { messagesForOrder } from '@/server/services/receipts'
 import { requireTenant } from '@/server/tenant'
-import { CancelRemainderForm, RefundForm } from '../order-forms'
+import { CancelRemainderForm, RefundForm, ResendReceiptForm } from '../order-forms'
+
+const when = new Intl.DateTimeFormat('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' })
 
 const METHOD: Record<string, string> = { cash: 'cash', mark_paid: 'marked paid', mpesa: 'M-Pesa', other: 'other' }
 
@@ -29,7 +32,7 @@ function eventLine(number: string, e: OrderEvent): Confirmation {
         ...base,
         status: e.method === 'mark_paid' ? 'Marked paid' : 'Paid',
         tone: 'paid',
-        detail: `${formatKes(e.amountCents ?? 0)}${e.method === 'cash' ? ' cash' : ''}.${e.detail ? ` ${e.detail}.` : ''}`,
+        detail: `${formatKes(e.amountCents ?? 0)}${e.method === 'cash' ? ' cash' : e.method === 'mpesa' ? ` by M-Pesa${e.reference ? ` ${e.reference}` : ''}` : ''}.${e.detail ? ` ${e.detail}.` : ''}`,
       }
     case 'refund':
       return { ...base, status: 'Refunded', tone: 'owed', detail: `${formatKes(e.amountCents ?? 0)} by ${METHOD[e.method ?? 'other']}. ${e.detail ?? ''}` }
@@ -72,6 +75,13 @@ async function OrderContent({ params }: { params: PageProps<'/admin/orders/[id]'
   }
   const { state: o, figures: f } = d
   const canCancel = can(ctx.role, 'order.cancel')
+  const messages = await messagesForOrder(db, ctx, o.id)
+  const receiptOptions = o.events
+    .filter((e) => (e.kind === 'payment' || e.kind === 'collection') && e.sourceId)
+    .map((e) => ({
+      sourceId: e.sourceId!,
+      label: `${e.kind === 'collection' ? 'Collection note' : `Payment ${formatKes(e.amountCents ?? 0)}`} · ${when.format(new Date(e.at))}`,
+    }))
   return (
     <>
       <PageHeader
@@ -147,6 +157,23 @@ async function OrderContent({ params }: { params: PageProps<'/admin/orders/[id]'
               <RefundForm orderId={o.id} max={formatKes(d.refundableCents)} />
             </Region>
           )}
+          <Region id="receipts-heading" title="Receipts" size="sm">
+            {messages.length > 0 && (
+              <ul className="pb-3 text-xs">
+                {messages.map((m) => (
+                  <li key={m.id} className="flex flex-wrap gap-x-2 border-b border-rule py-1.5">
+                    <span className="font-medium">{m.channel === 'sms' ? 'SMS' : 'Email'}</span>
+                    <span className="text-muted-foreground">{m.to}</span>
+                    <span className={m.status === 'failed' ? 'text-credit' : m.status === 'sent' ? 'text-paid' : 'text-owed-ink'}>
+                      {m.status === 'sent' ? `Sent ${when.format(m.sentAt!)}` : m.status === 'failed' ? 'Failed' : 'Waiting'}
+                    </span>
+                    {m.status !== 'sent' && m.lastError && <span className="w-full text-muted-foreground">{m.lastError}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <ResendReceiptForm orderId={o.id} receipts={receiptOptions} phone={o.customer?.phone ?? ''} />
+          </Region>
           {d.cancelledAt && d.cancelReason && (
             <p className="text-sm text-muted-foreground">Cancelled: {d.cancelReason}</p>
           )}

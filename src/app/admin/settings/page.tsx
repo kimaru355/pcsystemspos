@@ -5,6 +5,7 @@ import { db } from '@/db/client'
 import { can } from '@/domain/permissions'
 import { getMpesaSettings, type MpesaConfigView } from '@/server/services/mpesa'
 import { listOutlets } from '@/server/services/outlets'
+import { messagingConfigured, smsUsage } from '@/server/services/receipts'
 import { requireTenant } from '@/server/tenant'
 import { MpesaConfigForm, RegisterC2BForm } from './mpesa-forms'
 
@@ -49,7 +50,13 @@ async function SettingsContent() {
       </>
     )
   }
-  const [{ configs, appUrlSet, secretsKeySet }, outlets] = await Promise.all([getMpesaSettings(db, ctx), listOutlets(db, ctx)])
+  const monthStart = startOfNairobiMonth(new Date())
+  const [{ configs, appUrlSet, secretsKeySet }, outlets, usage] = await Promise.all([
+    getMpesaSettings(db, ctx),
+    listOutlets(db, ctx),
+    smsUsage(db, ctx, monthStart),
+  ])
+  const messaging = messagingConfigured()
   const business = configs.find((c) => c.outletId === null) ?? null
   const active = outlets.filter((o) => o.active)
 
@@ -87,7 +94,31 @@ async function SettingsContent() {
             )
           })}
         </Region>
+
+        <Region id="messages-heading" title="SMS and email receipts">
+          <p className="pb-3 text-sm text-muted-foreground">
+            Tills send receipts by SMS from the platform&apos;s sender name and by email from the platform&apos;s mail server.
+          </p>
+          <dl className="grid grid-cols-[10rem_minmax(0,1fr)] gap-y-2 text-sm">
+            <dt className="text-muted-foreground">SMS</dt>
+            <dd>{messaging.sms ? 'Ready' : 'Not set up on the server yet: SMS wait in the queue.'}</dd>
+            <dt className="text-muted-foreground">Email</dt>
+            <dd>{messaging.email ? 'Ready' : 'Not set up on the server yet: emails wait in the queue.'}</dd>
+            <dt className="text-muted-foreground">SMS this month</dt>
+            <dd className="figures">
+              {usage.messages} {usage.messages === 1 ? 'message' : 'messages'}, {usage.segments} billed {usage.segments === 1 ? 'part' : 'parts'}
+            </dd>
+          </dl>
+        </Region>
       </div>
     </>
   )
+}
+
+const monthKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit' })
+
+/** The first moment of this month in Nairobi (UTC+3 all year). */
+function startOfNairobiMonth(now: Date): Date {
+  const [y, m] = monthKey.format(now).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, 1) - 3 * 60 * 60 * 1000)
 }

@@ -143,3 +143,24 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* Till receipts: only the receipt prints, on an 80mm roll. */
+.print-receipt {
+  display: none;
+}
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 3mm;
+  }
+  body > *:not(.print-receipt) {
+    display: none !important;
+  }
+  .print-receipt {
+    display: block;
+    margin: 0;
+    font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    color: #000;
+  }
+}

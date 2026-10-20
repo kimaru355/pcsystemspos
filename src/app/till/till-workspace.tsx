@@ -47,6 +47,7 @@ import type { TillEngine } from '@/client/till/engine'
 import type { TillView } from '@/client/till/view'
 import { ApproverDialog } from './till-access'
 import { MpesaPayForm, PaymentsPanel } from './till-mpesa'
+import { ReceiptPanel } from './till-receipt'
 import {
   AmountField,
   ErrorText,
@@ -110,7 +111,7 @@ export function TillWorkspace({
   const [cart, setCart] = useState<CartLine[]>([])
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
-  const [done, setDone] = useState<{ number: string; text: string; tone: 'paid' | 'owed' | 'credit' | 'neutral' } | null>(null)
+  const [done, setDone] = useState<Done | null>(null)
   const [openOrder, setOpenOrder] = useState<{ id: string; mode: OrderMode } | null>(null)
   const scanRef = useRef<HTMLInputElement>(null)
   const actor: Actor = { membershipId: person.membershipId, name: person.name, role: person.role }
@@ -186,6 +187,7 @@ export function TillWorkspace({
       onUpdate={updateLine}
       onCheckout={() => setCheckoutOpen(true)}
       done={done}
+      onReceipt={(id) => setOpenOrder({ id, mode: 'receipt' })}
     />
   )
 
@@ -277,6 +279,7 @@ export function TillWorkspace({
             setCartOpen(false)
             const f = orderFigures(order)
             setDone({
+              orderId: order.id,
               number: order.number,
               tone: order.status === 'closed' ? 'paid' : f.creditInUseCents > 0 ? 'credit' : 'owed',
               text:
@@ -440,6 +443,7 @@ const OP_LABELS: Record<string, string> = {
   'payment.add': 'A payment',
   'collection.record': 'A collection',
   'stock.adjust': 'A stock adjustment',
+  'receipt.send': 'A receipt by SMS or email',
 }
 
 // -------------------------------------------------------------------- sale
@@ -596,6 +600,8 @@ function ItemPicker({
   )
 }
 
+type Done = { orderId: string; number: string; text: string; tone: 'paid' | 'owed' | 'credit' | 'neutral' }
+
 type CartView = {
   cart: CartLine
   name: string
@@ -613,6 +619,7 @@ function CartPane({
   onUpdate,
   onCheckout,
   done,
+  onReceipt,
 }: {
   lines: CartView[]
   totals: { grossCents: number; vatCents: number }
@@ -620,7 +627,8 @@ function CartPane({
   blocked: boolean
   onUpdate: (id: string, patch: Partial<CartLine> | null) => void
   onCheckout: () => void
-  done: { number: string; text: string; tone: 'paid' | 'owed' | 'credit' | 'neutral' } | null
+  done: Done | null
+  onReceipt: (orderId: string) => void
 }) {
   const [pricing, setPricing] = useState<{ id: string; cents: number } | null>(null)
   const needsApproval = lines.some((l) => l.cart.unitPriceCents < l.floorCents && !l.cart.priceApproverId)
@@ -648,6 +656,11 @@ function CartPane({
         {done && (
           <ul className="mb-2 border-b border-rule">
             <ConfirmationLine compact c={{ code: done.number, status: 'Saved', tone: done.tone, balance: done.text, at: new Date() }} />
+            <li className="pb-2">
+              <button type="button" onClick={() => onReceipt(done.orderId)} className="text-sm font-medium text-primary hover:underline">
+                Print or send the receipt
+              </button>
+            </li>
           </ul>
         )}
         <div className="flex items-baseline justify-between">
@@ -1128,7 +1141,7 @@ function OrderList({ title, orders, onOpen }: { title: string; orders: OrderStat
   )
 }
 
-type OrderMode = 'view' | 'pay' | 'mpesa' | 'collect'
+type OrderMode = 'view' | 'pay' | 'mpesa' | 'collect' | 'receipt'
 
 function OrderDialog({
   engine,
@@ -1194,6 +1207,9 @@ function OrderDialog({
                 </Button>
               </div>
             )}
+            <Button variant="outline" size="lg" className="h-11" onClick={() => setMode('receipt')}>
+              Print or send a receipt
+            </Button>
             <section>
               <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">History</h3>
               <ol className="divide-y divide-rule">
@@ -1204,6 +1220,7 @@ function OrderDialog({
             </section>
           </>
         )}
+        {mode === 'receipt' && <ReceiptPanel engine={engine} view={view} actor={actor} order={order} onDone={() => setMode('view')} />}
         {mode === 'mpesa' && (
           <div className="border-t border-rule pt-3">
             <MpesaPayForm engine={engine} actor={actor} order={order} onDone={() => setMode('view')} />

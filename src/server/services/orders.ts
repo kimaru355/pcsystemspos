@@ -44,6 +44,7 @@ import { DomainError } from '@/server/errors'
 import { assertCan, type TenantCtx } from '@/server/tenant'
 import { recordAudit } from './audit'
 import type { DeviceAuth } from './devices'
+import { issueReceipts } from './receipts'
 import { applyMovement } from './stock'
 import { membersById, type OpActor } from './till-auth'
 
@@ -99,27 +100,26 @@ export async function loadOrderStates(
     .where(and(eq(orders.businessId, businessId), inArray(orders.id, ids)))
   if (orderRows.length === 0) return new Map()
   const found = orderRows.map((r) => r.o.id)
-  const [lineRows, paymentRows, collectionRows] = await Promise.all([
-    db
-      .select()
-      .from(orderLines)
-      .where(and(eq(orderLines.businessId, businessId), inArray(orderLines.orderId, found)))
-      .orderBy(asc(orderLines.orderId), asc(orderLines.position)),
-    db
-      .select({ p: payments, actorName: users.name })
-      .from(payments)
-      .leftJoin(users, eq(users.id, payments.actorUserId))
-      .where(and(eq(payments.businessId, businessId), inArray(payments.orderId, found)))
-      .orderBy(asc(payments.occurredAt), asc(payments.createdAt)),
-    opts.events
-      ? db
-          .select({ c: collections, actorName: users.name })
-          .from(collections)
-          .innerJoin(users, eq(users.id, collections.actorUserId))
-          .where(and(eq(collections.businessId, businessId), inArray(collections.orderId, found)))
-          .orderBy(asc(collections.occurredAt), asc(collections.createdAt))
-      : Promise.resolve([]),
-  ])
+  // One query at a time: `db` may be a transaction, whose single connection runs queries in turn.
+  const lineRows = await db
+    .select()
+    .from(orderLines)
+    .where(and(eq(orderLines.businessId, businessId), inArray(orderLines.orderId, found)))
+    .orderBy(asc(orderLines.orderId), asc(orderLines.position))
+  const paymentRows = await db
+    .select({ p: payments, actorName: users.name })
+    .from(payments)
+    .leftJoin(users, eq(users.id, payments.actorUserId))
+    .where(and(eq(payments.businessId, businessId), inArray(payments.orderId, found)))
+    .orderBy(asc(payments.occurredAt), asc(payments.createdAt))
+  const collectionRows = opts.events
+    ? await db
+        .select({ c: collections, actorName: users.name })
+        .from(collections)
+        .innerJoin(users, eq(users.id, collections.actorUserId))
+        .where(and(eq(collections.businessId, businessId), inArray(collections.orderId, found)))
+        .orderBy(asc(collections.occurredAt), asc(collections.createdAt))
+    : []
 
   const collectedLines =
     opts.events && collectionRows.length > 0
@@ -408,12 +408,10 @@ function customerOf(raw: { name: string; phone: string } | null): Customer | nul
 async function sellableUnits(tx: Tx, businessId: string, lines: SaleCheckout['order']['lines']) {
   const itemIds = [...new Set(lines.map((l) => l.itemId))]
   const packIds = [...new Set(lines.flatMap((l) => (l.packId ? [l.packId] : [])))]
-  const [itemRows, packRows] = await Promise.all([
-    tx.select().from(items).where(and(eq(items.businessId, businessId), inArray(items.id, itemIds))),
-    packIds.length
-      ? tx.select().from(itemPacks).where(and(eq(itemPacks.businessId, businessId), inArray(itemPacks.id, packIds)))
-      : Promise.resolve([]),
-  ])
+  const itemRows = await tx.select().from(items).where(and(eq(items.businessId, businessId), inArray(items.id, itemIds)))
+  const packRows = packIds.length
+    ? await tx.select().from(itemPacks).where(and(eq(itemPacks.businessId, businessId), inArray(itemPacks.id, packIds)))
+    : []
   const itemById = new Map(itemRows.map((i) => [i.id, i]))
   const packById = new Map(packRows.map((p) => [p.id, p]))
   return (itemId: string, packId: string | null): SellableUnit | null => {
@@ -516,6 +514,8 @@ export async function applySaleCheckout(tx: Tx, c: OpContext, p: SaleCheckout): 
   if (p.collection && plan.collection) {
     await writeCollection(tx, c, order, p.collection.id, plan.collection, userOf(members, p.collection.creditApproverId))
   }
+  const sources = [...plan.payments.map((x) => x.input.id), ...(p.collection ? [p.collection.id] : [])]
+  await issueReceipts(tx, device.businessId, order.id, sources.length ? sources : [null])
   const [, , deviceCode] = m
   if (deviceCode === device.code) {
     await tx
@@ -537,6 +537,7 @@ export async function applyPaymentAdd(tx: Tx, c: OpContext, p: PaymentAdd): Prom
   unwrap(checkNamedCustomer(after))
   await writePayment(tx, c, before.id, before.number, p.payment, r.reason, userOf(members, p.payment.approverId))
   await persist(tx, c.device.businessId, before, after, c.occurredAt)
+  await issueReceipts(tx, c.device.businessId, before.id, [p.payment.id])
 }
 
 export async function applyCollectionRecord(tx: Tx, c: OpContext, p: CollectionRecord): Promise<void> {
@@ -558,6 +559,7 @@ export async function applyCollectionRecord(tx: Tx, c: OpContext, p: CollectionR
   unwrap(checkNamedCustomer(after))
   await writeCollection(tx, c, after, p.collection.id, r, userOf(members, approverId))
   await persist(tx, c.device.businessId, before, after, c.occurredAt)
+  await issueReceipts(tx, c.device.businessId, before.id, [p.collection.id])
 }
 
 /** Open orders of the device's outlet, plus those closed in the last two days (for look-up). */
@@ -859,5 +861,6 @@ export async function recordServerPayment(
     occurredAt: p.occurredAt,
   })
   await persist(tx, businessId, before, r.order, p.occurredAt)
+  await issueReceipts(tx, businessId, orderId, [paymentId])
   return { paymentId, created: true }
 }

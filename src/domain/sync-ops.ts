@@ -76,6 +76,14 @@ export const stockAdjustSchema = z.object({
   note: shortText.nullable(),
 })
 
+export const receiptSendSchema = z.object({
+  orderId: uuidSchema,
+  /** The payment or collection the receipt is for; null = the order receipt as it stands. */
+  sourceId: uuidSchema.nullable(),
+  channel: z.enum(['sms', 'email']),
+  to: z.string().min(1).max(200),
+})
+
 const envelope = {
   id: uuidSchema,
   actorId: uuidSchema,
@@ -88,6 +96,7 @@ export const opSchema = z.discriminatedUnion('type', [
   z.object({ ...envelope, type: z.literal('payment.add'), payload: paymentAddSchema }),
   z.object({ ...envelope, type: z.literal('collection.record'), payload: collectionRecordSchema }),
   z.object({ ...envelope, type: z.literal('stock.adjust'), payload: stockAdjustSchema }),
+  z.object({ ...envelope, type: z.literal('receipt.send'), payload: receiptSendSchema }),
 ])
 
 export type Op = z.infer<typeof opSchema>
@@ -96,6 +105,7 @@ export type SaleCheckout = z.infer<typeof saleCheckoutSchema>
 export type PaymentAdd = z.infer<typeof paymentAddSchema>
 export type CollectionRecord = z.infer<typeof collectionRecordSchema>
 export type StockAdjust = z.infer<typeof stockAdjustSchema>
+export type ReceiptSend = z.infer<typeof receiptSendSchema>
 
 export const SECTIONS = ['catalog', 'stock', 'staff', 'orders'] as const
 export type Section = (typeof SECTIONS)[number]

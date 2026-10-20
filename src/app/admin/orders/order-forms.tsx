@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Field, Message, useKeptForm } from '../_forms/form-kit'
-import { cancelRemainderAction, refundAction } from './actions'
+import { cancelRemainderAction, refundAction, resendReceiptAction } from './actions'
 
 export function CancelRemainderForm({ orderId }: { orderId: string }) {
   const f = useKeptForm(cancelRemainderAction)
@@ -50,6 +50,55 @@ export function RefundForm({ orderId, max }: { orderId: string; max: string }) {
         </Button>
       </div>
       <Message state={f.state} />
+    </form>
+  )
+}
+
+export function ResendReceiptForm({
+  orderId,
+  receipts,
+  phone,
+}: {
+  orderId: string
+  receipts: { sourceId: string; label: string }[]
+  phone: string
+}) {
+  const f = useKeptForm(resendReceiptAction)
+  const err = f.state.errors ?? {}
+  return (
+    <form key={f.nonce} action={f.action} noValidate className="flex flex-col gap-2">
+      <input type="hidden" name="orderId" value={orderId} />
+      <Field id="resend-source" label="Receipt" error={err.sourceId}>
+        {(p) => (
+          <select {...p} name="sourceId" defaultValue={f.text('sourceId', receipts[0]?.sourceId ?? '')}>
+            {receipts.map((r) => (
+              <option key={r.sourceId} value={r.sourceId}>
+                {r.label}
+              </option>
+            ))}
+            <option value="">The order as it stands</option>
+          </select>
+        )}
+      </Field>
+      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
+        <Field id="resend-channel" label="By" error={err.channel}>
+          {(p) => (
+            <select {...p} name="channel" defaultValue={f.text('channel', 'sms')}>
+              <option value="sms">SMS</option>
+              <option value="email">Email</option>
+            </select>
+          )}
+        </Field>
+        <Field id="resend-to" label="To" error={err.to}>
+          {(p) => <input {...p} name="to" defaultValue={f.text('to', phone)} placeholder="Phone or email" />}
+        </Field>
+      </div>
+      <div className="flex items-center gap-3">
+        <Button type="submit" variant="outline" disabled={f.pending}>
+          {f.pending ? 'Queuing…' : 'Send receipt'}
+        </Button>
+        <Message state={f.state} />
+      </div>
     </form>
   )
 }

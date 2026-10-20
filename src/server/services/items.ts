@@ -272,18 +272,17 @@ async function loadItem(db: Db | Tx, businessId: string, id: string): Promise<It
     .from(items)
     .where(and(eq(items.id, id), eq(items.businessId, businessId)))
   if (!row) return undefined
-  const [packs, barcodes] = await Promise.all([
-    db
-      .select()
-      .from(itemPacks)
-      .where(and(eq(itemPacks.itemId, id), eq(itemPacks.businessId, businessId)))
-      .orderBy(asc(itemPacks.baseQtyMilli), asc(itemPacks.name)),
-    db
-      .select()
-      .from(itemBarcodes)
-      .where(and(eq(itemBarcodes.itemId, id), eq(itemBarcodes.businessId, businessId)))
-      .orderBy(asc(itemBarcodes.createdAt), asc(itemBarcodes.barcode)),
-  ])
+  // In turn: `db` may be a transaction (one connection).
+  const packs = await db
+    .select()
+    .from(itemPacks)
+    .where(and(eq(itemPacks.itemId, id), eq(itemPacks.businessId, businessId)))
+    .orderBy(asc(itemPacks.baseQtyMilli), asc(itemPacks.name))
+  const barcodes = await db
+    .select()
+    .from(itemBarcodes)
+    .where(and(eq(itemBarcodes.itemId, id), eq(itemBarcodes.businessId, businessId)))
+    .orderBy(asc(itemBarcodes.createdAt), asc(itemBarcodes.barcode))
   return { ...toItemBase(row), packs: packs.map(toPack), barcodes: barcodes.map(toBarcode) }
 }
 

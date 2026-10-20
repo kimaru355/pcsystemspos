@@ -57,6 +57,8 @@ export function buildView(
       case 'stock.adjust':
         move(op.payload.itemId, op.payload.deltaMilli)
         break
+      case 'receipt.send':
+        break
       case 'sale.checkout': {
         if (orders.has(op.payload.order.id) || !meta.lines) break
         const customer = parseCustomer(op.payload.order.customer)

@@ -20,6 +20,7 @@ import { recordAudit } from './audit'
 import type { DeviceAuth } from './devices'
 import { mpesaEnabledFor } from './mpesa'
 import { applyCollectionRecord, applyPaymentAdd, applySaleCheckout, ordersForTill, type OpContext } from './orders'
+import { applyReceiptSend } from './receipts'
 import { insertMovementTx, lockStockTx } from './stock'
 import { isAllowedAtOutlet, membersById, staffForDevice } from './till-auth'
 
@@ -45,6 +46,7 @@ const HANDLERS: { [T in Op['type']]: Handler } = {
   'collection.record': (tx, c, op) =>
     applyCollectionRecord(tx, c, (op as Extract<Op, { type: 'collection.record' }>).payload),
   'stock.adjust': (tx, c, op) => applyStockAdjust(tx, c, (op as Extract<Op, { type: 'stock.adjust' }>).payload),
+  'receipt.send': (tx, c, op) => applyReceiptSend(tx, c, (op as Extract<Op, { type: 'receipt.send' }>).payload),
 }
 
 /** A Postgres integrity-constraint violation (class 23) anywhere in a wrapped error. */

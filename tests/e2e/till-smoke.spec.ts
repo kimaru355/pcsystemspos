@@ -104,7 +104,18 @@ test('a till is set up, sells offline, syncs, and unlocks with a PIN', async ({ 
   await expect(page.getByRole('tab', { name: 'Orders' })).toBeVisible()
   await page.getByRole('tab', { name: 'Orders' }).click()
   await expect(page.getByText('KTL-01-000001')).toBeVisible()
+
+  // Still offline: the receipt is ready to print, and an SMS waits in the outbox.
+  await page.getByText('KTL-01-000001').click()
+  await page.getByRole('button', { name: 'Print or send a receipt' }).click()
+  await expect(page.getByLabel('Receipt preview')).toContainText('TOTAL')
+  await page.getByLabel('Phone for SMS').fill('0712 345 678')
+  await page.getByRole('button', { name: 'SMS', exact: true }).click()
+  await expect(page.getByText('SMS will be sent once the till is online.')).toBeVisible()
+  await page.getByRole('button', { name: 'Done' }).click()
+  await page.keyboard.press('Escape')
   await context.setOffline(false)
+  await expect(page.getByText(/Synced \d\d:\d\d/)).toBeVisible({ timeout: 15_000 })
 
   // The owner (still signed in on the web) sees the till and the synced sale in admin.
   await page.goto('/admin/devices')
@@ -115,4 +126,6 @@ test('a till is set up, sells offline, syncs, and unlocks with a PIN', async ({ 
   await expect(page.getByRole('heading', { name: 'KTL-01-000001', level: 1 })).toBeVisible()
   await expect(page.getByText('Paid.', { exact: true })).toBeVisible()
   await expect(page.getByText('Collected.', { exact: true })).toBeVisible()
+  // No SMS provider in the test environment: the receipt waits in the queue, with the reason.
+  await expect(page.getByText('SMS is not set up on the server.')).toBeVisible()
 })
