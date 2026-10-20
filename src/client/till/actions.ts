@@ -12,7 +12,7 @@ import {
   type LineInput,
   type LineState,
   type OrderState,
-  type PaymentInput,
+  type TillPaymentInput,
   type RuleResult,
 } from '@/domain/order-state'
 import { can } from '@/domain/permissions'
@@ -115,7 +115,7 @@ function collectionOf(draft: { collect: Record<string, Milli> }, creditApproverI
   return lines.length === 0 ? null : { id: uuid(), lines, creditApproverId }
 }
 
-function paymentOf(p: CheckoutDraft['payment']): PaymentInput[] {
+function paymentOf(p: CheckoutDraft['payment']): TillPaymentInput[] {
   if (!p || p.amountCents <= 0) return []
   return [
     {

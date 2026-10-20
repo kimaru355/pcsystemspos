@@ -29,6 +29,13 @@
       "when": 1792281767335,
       "tag": "0003_phase3_5_till_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792522459495,
+      "tag": "0004_phase6_8_mpesa_receipts",
+      "breakpoints": true
     }
   ]
 }

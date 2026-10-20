@@ -108,7 +108,7 @@ export async function loadOrderStates(
     db
       .select({ p: payments, actorName: users.name })
       .from(payments)
-      .innerJoin(users, eq(users.id, payments.actorUserId))
+      .leftJoin(users, eq(users.id, payments.actorUserId))
       .where(and(eq(payments.businessId, businessId), inArray(payments.orderId, found)))
       .orderBy(asc(payments.occurredAt), asc(payments.createdAt)),
     opts.events
@@ -151,7 +151,8 @@ export async function loadOrderStates(
         events.push({
           kind: p.kind,
           at: p.occurredAt.toISOString(),
-          by: actorName,
+          // A paybill payment matched automatically has no person behind it.
+          by: actorName ?? 'M-Pesa',
           amountCents: p.amountCents,
           method: p.method,
           detail: p.reason ?? undefined,
@@ -340,7 +341,7 @@ async function writePayment(
   c: OpContext,
   orderId: string,
   number: string,
-  p: { id: string; method: 'cash' | 'mark_paid'; amountCents: Cents; approverId: string | null },
+  p: { id: string; method: 'cash' | 'mark_paid' | 'mpesa'; amountCents: Cents; approverId: string | null },
   reason: string | null,
   approverUserId: string | null,
 ): Promise<void> {

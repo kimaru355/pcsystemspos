@@ -20,6 +20,23 @@ function getPool(): Pool {
   return (globalForPool.__posPgPool ??= createPool())
 }
 
-export const db = drizzle(getPool(), { schema })
-export type Db = typeof db
+function createDb() {
+  return drizzle(getPool(), { schema })
+}
+
+export type Db = ReturnType<typeof createDb>
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
+
+let instance: Db | undefined
+
+/**
+ * The database, connected on first use: importing this module reads no environment, so
+ * `next build` (and anything else that only imports it) needs no DATABASE_URL.
+ */
+export const db: Db = new Proxy({} as Db, {
+  get(_target, prop) {
+    instance ??= createDb()
+    const value = Reflect.get(instance, prop, instance)
+    return typeof value === 'function' ? value.bind(instance) : value
+  },
+})

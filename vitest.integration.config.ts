@@ -18,7 +18,8 @@ export default defineConfig({
     environment: 'node',
     fileParallelism: false,
     globalSetup: ['tests/helpers/global-setup.ts'],
-    env: { DATABASE_URL: testDatabaseUrl },
+    // SECRETS_KEY: a fixed test key (32 zero bytes) so encrypted settings can be stored.
+    env: { DATABASE_URL: testDatabaseUrl, SECRETS_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', APP_URL: 'https://pos.test' },
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },

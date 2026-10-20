@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
 import { users } from './auth'
@@ -163,15 +164,20 @@ export const payments = pgTable(
     method: paymentMethod('method').notNull(),
     amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
     reason: text('reason'),
+    /** M-Pesa receipt number for M-Pesa payments. */
+    reference: text('reference'),
     approvedBy: uuid('approved_by').references(() => users.id),
-    actorUserId: uuid('actor_user_id')
-      .notNull()
-      .references(() => users.id),
+    /** Null for a paybill payment matched automatically: no person took it. */
+    actorUserId: uuid('actor_user_id').references(() => users.id),
     deviceId: uuid('device_id').references(() => devices.id),
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    // One M-Pesa receipt pays once, however often Safaricom calls back.
+    uniqueIndex('payments_business_reference_unique')
+      .on(t.businessId, t.reference)
+      .where(sql`${t.reference} is not null and ${t.kind} = 'payment'`),
     check('payments_amount_positive', sql`${t.amountCents} > 0`),
     check(
       'payments_mark_paid_approved',

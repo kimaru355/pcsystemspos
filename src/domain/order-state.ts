@@ -235,11 +235,15 @@ export function buildLines(
 
 export type PaymentInput = {
   id: string
-  method: 'cash' | 'mark_paid'
+  /** `mpesa` payments are recorded by the server only (STK callback, paybill match). */
+  method: 'cash' | 'mark_paid' | 'mpesa'
   amountCents: Cents
   reason: string | null
   approverId: string | null
 }
+
+/** What a till may record itself (M-Pesa is recorded by the server). */
+export type TillPaymentInput = PaymentInput & { method: 'cash' | 'mark_paid' }
 
 export function applyPayment(
   order: OrderState,
@@ -258,7 +262,7 @@ export function applyPayment(
     const r = parseReason(p.reason, 'marking paid')
     if (!r.ok) return r
     reason = r.reason
-  } else if (p.method !== 'cash') {
+  } else if (p.method !== 'cash' && p.method !== 'mpesa') {
     return fail('invalid_input', 'Choose a payment method.')
   }
   const next: OrderState = {

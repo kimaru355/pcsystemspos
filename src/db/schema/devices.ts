@@ -7,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -87,4 +88,19 @@ export const syncOps = pgTable(
       .on(t.businessId, t.receivedAt)
       .where(sql`${t.status} = 'rejected'`),
   ],
+)
+
+/** People who signed in on a till: only they get their PIN verifier on that device. */
+export const deviceStaff = pgTable(
+  'device_staff',
+  {
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id),
+    membershipId: uuid('membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    enrolledAt: timestamp('enrolled_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.deviceId, t.membershipId] }), index('device_staff_membership_idx').on(t.membershipId)],
 )
