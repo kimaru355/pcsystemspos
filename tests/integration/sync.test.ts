@@ -236,6 +236,23 @@ describe('sync pull', () => {
     expect(Object.keys(r2.sections)).toEqual(['stock'])
   })
 
+  it('sends PIN verifiers only for people who signed in on this till', async () => {
+    const w = await tillWorld()
+    await db.update(users).set({ mustChangePassword: false })
+    let r = await sync(db, w.device, { ops: [], hashes: {}, clock: CLOCK })
+    expect(r.sections.staff!.data.staff.every((s) => s.pin === null)).toBe(true)
+    await tillSignIn(db, w.device, { identifier: w.manager.email!, password: 'temp-pass-1234', pin: '2222' })
+    r = await sync(db, w.device, { ops: [], hashes: {}, clock: CLOCK })
+    const withPin = r.sections.staff!.data.staff.filter((s) => s.pin !== null).map((s) => s.membershipId)
+    expect(withPin).toEqual([w.manager.membershipId])
+    // Another till of the same outlet still has none.
+    const reg = await registerDevice(db, w.owner, { outletId: w.ktl, name: 'Second' })
+    const auth = await authenticateDevice(db, reg.token)
+    if (!auth.ok) throw new Error()
+    r = await sync(db, auth.device, { ops: [], hashes: {}, clock: CLOCK })
+    expect(r.sections.staff!.data.staff.every((s) => s.pin === null)).toBe(true)
+  })
+
   it('drops people deactivated or moved to another outlet from the staff section', async () => {
     const w = await tillWorld()
     await deactivateStaff(db, w.owner, w.cashier.membershipId)

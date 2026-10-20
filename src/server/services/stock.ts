@@ -527,30 +527,33 @@ export async function itemHistory(
   return rows.map((r) => toMovement(r.m, r.actorName))
 }
 
-/** Low-stock item counts for the active outlets in scope; outlets with none are left out. */
+/** Low-stock item counts for the active outlets in scope; outlets with none are left out. One query. */
 export async function lowStockCounts(
   db: Db,
   ctx: TenantCtx,
 ): Promise<{ outletId: string; count: number }[]> {
   assertCan(ctx, 'stock.view')
   if (ctx.outletScope !== 'all' && ctx.outletScope.length === 0) return []
-  const rows = await db
-    .select({ id: outlets.id })
-    .from(outlets)
-    .where(
-      and(
-        eq(outlets.businessId, ctx.businessId),
-        eq(outlets.active, true),
-        ctx.outletScope === 'all' ? undefined : inArray(outlets.id, ctx.outletScope),
-      ),
+  const scope = ctx.outletScope === 'all' ? sql`` : sql`and ot.id = any(${sql.param(ctx.outletScope)}::uuid[])`
+  const { rows } = await db.execute<{ outlet_id: string; count: string }>(sql`
+    with owed as (
+      select o.outlet_id, l.item_id,
+             sum((l.qty_milli - l.cancelled_milli - l.collected_milli) * l.base_qty_per_unit_milli / 1000) as owed
+      from order_lines l join orders o on o.id = l.order_id
+      where o.business_id = ${ctx.businessId} and o.status = 'open'
+      group by 1, 2
     )
-    .orderBy(asc(outlets.code), asc(outlets.id))
-  const out: { outletId: string; count: number }[] = []
-  for (const o of rows) {
-    const low = await loadStockRows(db, ctx.businessId, o.id, { lowOnly: true })
-    if (low.length > 0) out.push({ outletId: o.id, count: low.length })
-  }
-  return out
+    select ot.id as outlet_id, count(*) as count
+    from outlets ot
+    join items i on i.business_id = ot.business_id
+    left join outlet_stock s on s.outlet_id = ot.id and s.item_id = i.id
+    left join owed w on w.outlet_id = ot.id and w.item_id = i.id
+    where ot.business_id = ${ctx.businessId} and ot.active and i.active and i.low_stock_milli is not null
+      and coalesce(s.on_hand_milli, 0) - coalesce(w.owed, 0) <= i.low_stock_milli
+      ${scope}
+    group by ot.id, ot.code
+    order by ot.code, ot.id`)
+  return rows.map((r) => ({ outletId: r.outlet_id, count: Number(r.count) }))
 }
 
 // --------------------------------------------------------------------- writes

@@ -13,7 +13,7 @@ import { readOutletFilter } from '@/server/outlet-filter'
 import { listRecentActivity } from '@/server/services/activity'
 import { listDevices } from '@/server/services/devices'
 import { hasActiveItems } from '@/server/services/items'
-import { salesSince } from '@/server/services/orders'
+import { attentionCounts, moneyOwed, paymentsByMethod, salesSummary } from '@/server/services/reports'
 import { listOutlets } from '@/server/services/outlets'
 import { listStaff } from '@/server/services/staff'
 import { lowStockCounts } from '@/server/services/stock'
@@ -36,6 +36,14 @@ export default function AdminOverviewPage() {
 }
 
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' })
+
+const METHOD_LABELS: Record<string, string> = { cash: 'Cash', mpesa: 'M-Pesa', mark_paid: 'Marked paid', other: 'Other' }
+
+/** From midnight in Nairobi until a day from now. */
+function todayInNairobi(): { from: Date; to: Date } {
+  const now = new Date()
+  return { from: startOfNairobiDay(now), to: new Date(now.getTime() + 24 * 60 * 60 * 1000) }
+}
 
 /** Midnight in Nairobi (UTC+3 all year) of the day `now` falls on. */
 function startOfNairobiDay(now: Date): Date {
@@ -64,10 +72,15 @@ async function OverviewContent() {
   const active = outlets.filter((o) => o.active)
   const filter = await readOutletFilter(active.map((o) => o.id))
   const scoped = filter === 'all' ? null : active.find((o) => o.id === filter)
-  const [sales, devices, hasItems] = await Promise.all([
-    salesSince(db, ctx, startOfNairobiDay(new Date()), scoped?.id ?? null),
+  const todayRange = todayInNairobi()
+  const scope = { outletId: scoped?.id ?? null }
+  const [sales, devices, hasItems, owed, methods, attention] = await Promise.all([
+    salesSummary(db, ctx, todayRange, scope),
     listDevices(db, ctx),
     hasActiveItems(db, ctx),
+    moneyOwed(db, ctx, scope),
+    paymentsByMethod(db, ctx, todayRange, scope),
+    attentionCounts(db, ctx, scope),
   ])
   const tillsToCheck = devices.filter(
     (d) => !d.revokedAt && (d.pastReminder || d.clockJumps > 0) && (!scoped || d.outletId === scoped.id),
@@ -193,10 +206,63 @@ async function OverviewContent() {
                 {sales.owedCents > 0 && <span className="text-owed-ink">, {formatKes(sales.owedCents)} still owed</span>}.
               </p>
             )}
+            {methods.length > 0 && (
+              <ul className="figures mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {methods.map((m) => (
+                  <li key={`${m.kind}-${m.method}`}>
+                    <span className="text-muted-foreground">{m.kind === 'refund' ? 'Refunds ' : ''}{METHOD_LABELS[m.method] ?? m.method} </span>
+                    <span className="font-semibold">{formatKes(m.amountCents)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="mt-1 text-sm text-muted-foreground">
               Orders taken today across {scoped ? scoped.name : 'your outlets'}, once the tills have synced.
             </p>
           </Region>
+
+          <Region
+            id="owed-heading"
+            title="Owed to the shop"
+            size="sm"
+            aside={
+              <Link href="/admin/customers" className="text-xs text-primary underline-offset-4 hover:underline">
+                Customers
+              </Link>
+            }
+          >
+            <dl className="figures grid grid-cols-[1fr_auto] gap-y-1 text-sm">
+              <dt className="text-muted-foreground">
+                On {owed.openOrders} open {owed.openOrders === 1 ? 'order' : 'orders'}
+              </dt>
+              <dd className={cn('text-right font-semibold', owed.owedCents > 0 && 'text-owed-ink')}>{formatKes(owed.owedCents)}</dd>
+              <dt className="text-muted-foreground">Goods taken on credit</dt>
+              <dd className={cn('text-right font-semibold', owed.creditCents > 0 && 'text-credit')}>{formatKes(owed.creditCents)}</dd>
+            </dl>
+          </Region>
+
+          {(attention.unmatched > 0 || attention.negative > 0) && (
+            <Region id="attention-heading" title="Needs attention" size="sm">
+              <ul className="divide-y divide-rule text-sm">
+                {attention.unmatched > 0 && (
+                  <li>
+                    <Link href="/admin/payments" className="-mx-2 flex items-baseline gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
+                      <span className="min-w-0 flex-1">M-Pesa payments to match</span>
+                      <span className="figures font-semibold text-owed-ink">{attention.unmatched}</span>
+                    </Link>
+                  </li>
+                )}
+                {attention.negative > 0 && (
+                  <li>
+                    <Link href="/admin/stock?negative=1" className="-mx-2 flex items-baseline gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
+                      <span className="min-w-0 flex-1">Items below zero stock</span>
+                      <span className="figures font-semibold text-credit">{attention.negative}</span>
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </Region>
+          )}
 
           {tillsToCheck.length > 0 && (
             <Region

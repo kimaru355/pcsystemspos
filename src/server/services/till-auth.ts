@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
-import { membershipOutlets, memberships, users } from '@/db/schema'
+import { deviceStaff, membershipOutlets, memberships, users } from '@/db/schema'
 import { createPinVerifier, isValidPin } from '@/domain/pin'
 import type { Role } from '@/domain/permissions'
 import type { TillStaff } from '@/domain/till-data'
@@ -27,7 +27,10 @@ function allowedAtOutlet(outletId: string) {
   )!
 }
 
-/** Active members of the device's business allowed at its outlet, with their offline PIN verifier. */
+/**
+ * Active members of the device's business allowed at its outlet. Only people who signed in on
+ * this till get their offline PIN verifier on it: a copied device exposes no one else's PIN.
+ */
 export async function staffForDevice(db: Db | Tx, device: DeviceAuth): Promise<TillStaff[]> {
   const rows = await db
     .select({
@@ -37,9 +40,14 @@ export async function staffForDevice(db: Db | Tx, device: DeviceAuth): Promise<T
       role: memberships.role,
       pinSalt: memberships.pinSalt,
       pinVerifier: memberships.pinVerifier,
+      enrolled: deviceStaff.membershipId,
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
+    .leftJoin(
+      deviceStaff,
+      and(eq(deviceStaff.membershipId, memberships.id), eq(deviceStaff.deviceId, device.deviceId)),
+    )
     .where(
       and(
         eq(memberships.businessId, device.businessId),
@@ -53,7 +61,7 @@ export async function staffForDevice(db: Db | Tx, device: DeviceAuth): Promise<T
     userId: r.userId,
     name: r.name,
     role: r.role,
-    pin: r.pinSalt && r.pinVerifier ? { salt: r.pinSalt, verifier: r.pinVerifier } : null,
+    pin: r.enrolled && r.pinSalt && r.pinVerifier ? { salt: r.pinSalt, verifier: r.pinVerifier } : null,
   }))
 }
 
@@ -100,6 +108,7 @@ export async function tillSignIn(
   }
   const verifier = await createPinVerifier(input.pin)
   await db.transaction(async (tx) => {
+    await tx.insert(deviceStaff).values({ deviceId: device.deviceId, membershipId: m.id }).onConflictDoNothing()
     await tx
       .update(memberships)
       .set({
