@@ -2,9 +2,11 @@
 
 Multi-tenant point of sale and stock management for hardware shops. Next.js (App Router), TypeScript, Drizzle ORM and PostgreSQL.
 
-Currency is KES, stored as integer cents. Built so far (see `docs/superpowers/plans/2026-10-17-mvp-roadmap.md`):
-sign-in, businesses, outlets and staff; the catalog and stock; the offline-first till with its sync
-engine; orders, payments and collections; and connection modes.
+Currency is KES, stored as integer cents. The MVP roadmap (`docs/superpowers/plans/2026-10-17-mvp-roadmap.md`)
+is built: sign-in, businesses, outlets and staff; the catalog and stock; the offline-first till with
+its sync engine; orders, payments and collections; connection modes; M-Pesa (STK push and paybill/till
+payments); receipts (80mm print, Bluetooth printers, SMS and email); reports, customers, the audit log,
+the daily low-stock email; and a Docker deploy. Deploying to a server: `docs/deploy.md`.
 
 ## Prerequisites
 
@@ -57,6 +59,12 @@ engine; orders, payments and collections; and connection modes.
    <http://localhost:3000/till>. Pick the outlet and name the till. Each person then signs in on
    that till once, online, with their password and PIN (someone without a PIN chooses one there);
    after that the PIN opens the till without internet.
+
+   M-Pesa, SMS and email need server settings (`APP_URL`, `SECRETS_KEY`, Africa's Talking, SMTP; see
+   `.env.example`). Without them those features say they are not set up and everything else works.
+   Background jobs (message delivery, the daily low-stock email) run when something calls
+   `POST /api/internal/cron` with `Authorization: Bearer $CRON_SECRET`; in production a container
+   does this every minute.
 
    The till works offline from the start of a session. To open it with no network after a reload,
    it needs the service worker, which is only registered in a production build

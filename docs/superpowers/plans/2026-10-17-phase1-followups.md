@@ -152,3 +152,38 @@ depends on it. Read this when writing the next phase's plan.
 - Order lines take name, unit and VAT from the server's catalog at sync time, while price and floor
   come from what the till showed; a pack resized between pull and sale moves the new size.
 - Payments tab on the till is a placeholder until M-Pesa.
+
+---
+
+# Phases 6–8 — Follow-ups (M-Pesa, receipts, insights, go-live)
+
+## Resolved in Phases 6–8
+
+- PIN verifiers: a till only holds those of people who signed in on it (`device_staff`).
+- Lazy db client (`next build` needs no `DATABASE_URL`); platform CLI reads passwords from stdin,
+  takes `--actor`, and new platform admins must change their password.
+- Purge of old login attempts and expired sessions (cron); `audit_log` index (Phase 3–5).
+- Rejected sync ops have an admin view (Audit log → Refused from tills).
+- `lowStockCounts` and the overview's sales figures run in single SQL queries.
+
+## Before the first client goes live
+
+- **Test against the real services** (not possible from the build environment): an STK push and a
+  paybill payment on the Daraja sandbox, then production; an SMS through Africa's Talking with the
+  approved sender ID; an email from the VPS with SPF/DKIM/DMARC passing; printing on the shop's
+  Bluetooth printer from an Android phone; installing the till over HTTPS.
+- Build and start the Docker stack on the VPS (`docs/deploy.md`); test a backup restore.
+- Existing tills (from before `device_staff`) must have each person sign in on them again once,
+  online, before PINs work offline there.
+- Check Safaricom's current callback IP list before setting `MPESA_CALLBACK_IPS`.
+
+## Later
+
+- An STK callback that fails on our side is only logged (Safaricom does not retry); a "check
+  status" call to Daraja's STK query API would let the server recover such payments.
+- The till fetches unmatched payments for the whole business; filter by the outlet's shortcode
+  once businesses have many outlets with their own tills.
+- Reports load at most 500 customers and show 50 rows per table on screen (CSV has all).
+- Refunds through M-Pesa (B2C) and KRA eTIMS submission are not built.
+- Digests run once per app process per day (deduplicated per person), which assumes one app
+  container; with several, move the run marker to the database.

@@ -22,6 +22,10 @@ call that later has to be rewritten.
 | 7 | **Receipts** | Order receipt and collection note; 80mm browser print; Web Bluetooth ESC/POS on Android; SMS (Africa's Talking) and email (VPS SMTP) with offline queueing; reprint/resend; SMS usage counter. | 10 |
 | 8 | **Admin insights and go-live** | Dashboard, reports + CSV, customers and credit owed, audit log viewer, device last-sync status, daily low-stock email digest, Docker deploy on the VPS with HTTPS and backups. | 11, 13 (deploy) |
 
+**Status (2026-10-20):** all eight phases are built. Phases 6–8 were designed and built together:
+`docs/superpowers/specs/2026-10-20-phase6-8-mpesa-receipts-golive-design.md` and
+`docs/superpowers/plans/2026-10-20-phase6-8-mpesa-receipts-golive.md`. Deploying: `docs/deploy.md`.
+
 **Status (2026-10-18):** Phases 1–5 are built. Phases 3–5 were designed and built together:
 `docs/superpowers/specs/2026-10-18-phase3-5-till-orders-modes-design.md` and
 `docs/superpowers/plans/2026-10-18-phase3-5-till-orders-modes.md`. The till uses a hand-written,
