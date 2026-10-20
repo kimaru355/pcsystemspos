@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/shell/page-header'
 import { Region } from '@/components/shell/region'
 import { db } from '@/db/client'
 import { formatKes } from '@/domain/money'
-import { listUnmatchedForAdmin } from '@/server/services/mpesa'
+import { listRecentlyMatched, listUnmatchedForAdmin } from '@/server/services/mpesa'
 import { requireTenant } from '@/server/tenant'
 import { AttachForm } from './payment-forms'
 
@@ -33,7 +33,7 @@ export default function PaymentsPage() {
 
 async function PaymentsContent() {
   const ctx = await requireTenant()
-  const rows = await listUnmatchedForAdmin(db, ctx)
+  const [rows, matched] = await Promise.all([listUnmatchedForAdmin(db, ctx), listRecentlyMatched(db, ctx)])
   return (
     <>
       <PageHeader
@@ -63,6 +63,27 @@ async function PaymentsContent() {
           </ul>
         )}
       </Region>
+      <div className="pt-10">
+        <Region id="matched-heading" title="Matched this week" size="sm">
+          {matched.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No M-Pesa payments matched yet.</p>
+          ) : (
+            <ul className="text-sm">
+              {matched.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-baseline gap-x-3 border-b border-rule py-2">
+                  <span className="font-mono text-[0.8rem] font-medium">{m.transId}</span>
+                  <span className="figures font-semibold">{formatKes(m.amountCents)}</span>
+                  <span>
+                    Attached to <span className="font-mono text-[0.8rem]">{m.orderNumber}</span>
+                    <span className="text-muted-foreground">{m.matchedByName ? ` by ${m.matchedByName}` : ' automatically'}</span>
+                  </span>
+                  {m.matchedAt && <span className="text-xs text-muted-foreground">{when.format(m.matchedAt)}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Region>
+      </div>
     </>
   )
 }

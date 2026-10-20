@@ -129,3 +129,57 @@ test('a till is set up, sells offline, syncs, and unlocks with a PIN', async ({ 
   // No SMS provider in the test environment: the receipt waits in the queue, with the reason.
   await expect(page.getByText('SMS is not set up on the server.')).toBeVisible()
 })
+
+test('the owner sets up M-Pesa, matches a paybill payment, and reads reports', async ({ page, request }) => {
+  await logIn(page, OWNER_EMAIL, PASSWORD)
+  await expect(page).toHaveURL(/\/admin$/)
+
+  // M-Pesa settings: credentials are stored but never shown again.
+  await page.goto('/admin/settings')
+  const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Save M-Pesa settings' }) }).first()
+  await form.getByLabel('Business shortcode').fill('174379')
+  await form.getByLabel('Consumer key').fill('test-key')
+  await form.getByLabel('Consumer secret').fill('test-secret')
+  await form.getByLabel('Passkey').fill('test-passkey')
+  await form.getByRole('button', { name: 'Save M-Pesa settings' }).click()
+  await expect(page.getByText('M-Pesa settings saved.')).toBeVisible()
+  const confirmation = await page.getByText(/\/api\/mpesa\/c2b\/.+\/confirmation$/).first().textContent()
+
+  // Safaricom confirms a paybill payment with an account nobody recognises.
+  const res = await request.post(confirmation!.replace(/^https?:\/\/[^/]+/, ''), {
+    data: {
+      TransactionType: 'Pay Bill',
+      TransID: 'SJK7E2E001',
+      TransTime: '20261020100000',
+      TransAmount: '500.00',
+      BusinessShortCode: '174379',
+      BillRefNumber: 'cement',
+      MSISDN: '254712345678',
+      FirstName: 'PETER',
+    },
+  })
+  expect(res.ok()).toBe(true)
+
+  // It waits on Payments until someone attaches it to the order.
+  await page.goto('/admin/payments')
+  await expect(page.getByText('SJK7E2E001')).toBeVisible()
+  await page.getByLabel('Order number').fill('KTL-01-000001')
+  await page.getByRole('button', { name: 'Attach' }).click()
+  await expect(page.getByRole('region', { name: 'Matched this week' })).toContainText('Attached to KTL-01-000001 by Tina Owner')
+
+  // Reports, customers and the audit log.
+  await page.goto('/admin/reports')
+  await expect(page.getByRole('heading', { name: 'Sales by day' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Cement 50kg' }).first()).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'M-Pesa' })).toBeVisible()
+  const csv = await request.get(
+    (await page.getByRole('link', { name: 'Download CSV' }).first().getAttribute('href'))!,
+  )
+  expect(csv.status()).toBe(403) // the API request context has no session
+  await page.goto('/admin/customers')
+  await expect(page.getByRole('heading', { name: 'Customers', level: 1 })).toBeVisible()
+  await page.goto('/admin/audit')
+  await expect(page.getByText('Till set up.', { exact: false })).toBeVisible()
+  await expect(page.getByText('M-Pesa payment attached.')).toBeVisible()
+  await expect(page.getByText('M-Pesa settings saved.').first()).toBeVisible()
+})

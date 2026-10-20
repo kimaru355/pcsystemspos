@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
-import { mpesaConfigs, mpesaRequests, mpesaTransactions, orders, outlets } from '@/db/schema'
+import { mpesaConfigs, mpesaRequests, mpesaTransactions, orders, outlets, users } from '@/db/schema'
 import { getEnv } from '@/env'
 import { isUuid } from '@/domain/ids'
 import type { Cents } from '@/domain/money'
@@ -508,6 +508,39 @@ async function unmatched(db: Db, businessId: string, limit: number): Promise<Unm
 export async function listUnmatchedForAdmin(db: Db, ctx: TenantCtx, limit = 100) {
   assertCan(ctx, 'payment.match')
   return unmatched(db, ctx.businessId, limit)
+}
+
+export type MatchedPayment = UnmatchedPayment & { orderNumber: string; matchedByName: string | null; matchedAt: Date | null }
+
+/** M-Pesa payments matched to orders in the last 7 days (by a person or automatically), newest first. */
+export async function listRecentlyMatched(db: Db, ctx: TenantCtx, limit = 50): Promise<MatchedPayment[]> {
+  assertCan(ctx, 'payment.match')
+  const rows = await db
+    .select({ t: mpesaTransactions, orderNumber: orders.number, matchedByName: users.name })
+    .from(mpesaTransactions)
+    .innerJoin(orders, eq(orders.id, mpesaTransactions.orderId))
+    .leftJoin(users, eq(users.id, mpesaTransactions.matchedBy))
+    .where(
+      and(
+        eq(mpesaTransactions.businessId, ctx.businessId),
+        eq(mpesaTransactions.status, 'matched'),
+        sql`${mpesaTransactions.matchedAt} > now() - interval '7 days'`,
+      ),
+    )
+    .orderBy(desc(mpesaTransactions.matchedAt))
+    .limit(limit)
+  return rows.map(({ t, orderNumber, matchedByName }) => ({
+    id: t.id,
+    transId: t.transId,
+    amountCents: t.amountCents,
+    payerName: t.payerName,
+    msisdn: t.msisdn ? `…${t.msisdn.slice(-4)}` : null,
+    billRef: t.billRef,
+    transTime: t.transTime,
+    orderNumber,
+    matchedByName,
+    matchedAt: t.matchedAt,
+  }))
 }
 
 export async function listUnmatchedForTill(db: Db, device: DeviceAuth) {

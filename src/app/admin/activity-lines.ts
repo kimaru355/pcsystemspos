@@ -181,6 +181,22 @@ function tillConfirmation(e: ActivityEntry, data: Record<string, unknown>): Conf
       return { code: number, status: 'Remainder cancelled', tone: 'owed', detail: `${e.reason ?? ''}`, by, at }
     case 'order.refund':
       return { code: number, status: 'Refunded', tone: 'owed', detail: `${kes(data.amountCents)}. ${e.reason ?? ''}`.trim(), by, at }
+    case 'mpesa.attach':
+      return { code: number, status: 'M-Pesa payment attached', tone: 'paid', detail: `${text(data.transId, '')} ${kes(data.amountCents)}.`.trim(), by, at }
+    case 'mpesa.config':
+      return {
+        code: 'MPESA',
+        status: 'M-Pesa settings saved',
+        detail: `${data.outletId ? 'Outlet' : 'Business'} ${text(data.shortcodeType, '')} ${text(data.partyB, '')}, ${text(data.environment, '')}${data.credentialsChanged ? ', credentials changed' : ''}.`,
+        by,
+        at,
+      }
+    case 'mpesa.register_c2b':
+      return { code: 'MPESA', status: 'M-Pesa payments registered', detail: `for ${text(data.partyB, 'the shortcode')}.`, by, at }
+    case 'receipt.resend':
+      return { code: number, status: 'Receipt sent again', detail: `by ${data.channel === 'email' ? 'email' : 'SMS'}.`, by, at }
+    case 'platform.create_business':
+      return { code: 'PLAT', status: 'Business created', detail: `by the platform for ${text(data.ownerName, 'the owner')}.`, by, at }
     default:
       return null
   }

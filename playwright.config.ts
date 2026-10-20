@@ -20,6 +20,10 @@ export default defineConfig({
       PORT: String(PORT),
       DATABASE_URL:
         process.env.TEST_DATABASE_URL ?? 'postgres://pos:pos@localhost:5433/pos_test',
+      // Test-only values so M-Pesa settings can be saved and callbacks reach this server.
+      SECRETS_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      APP_URL: `http://localhost:${PORT}`,
+      CRON_SECRET: 'e2e-cron-secret',
     },
   },
 })
